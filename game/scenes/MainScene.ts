@@ -16,6 +16,9 @@ export default class MainScene extends Scene {
     private selector: Phaser.GameObjects.Graphics | null = null;
     private houseRoof: Phaser.GameObjects.Image | null = null;
 
+    // AMBIANCE
+    private fireflies: Phaser.GameObjects.Particles.ParticleEmitter | null = null;
+
     // GESTION DES OBJETS
     private objectMap: Map<string, Phaser.GameObjects.Image> = new Map();
 
@@ -35,7 +38,7 @@ export default class MainScene extends Scene {
     private mapOriginX = 0;
     private mapOriginY = 0;
 
-    // Flag pour éviter le double clic (Objet + Sol en même temps)
+    // Flags
     private ignoreNextMapClick = false;
 
     private playerStore: any = null;
@@ -53,6 +56,7 @@ export default class MainScene extends Scene {
 
         this.createHeroTexture();
         this.createPlaceholderTextures();
+        this.createFireflyTexture();
     }
 
     createHeroTexture() {
@@ -81,6 +85,14 @@ export default class MainScene extends Scene {
             g.lineStyle(4, 0x263238, 1); g.strokePath();
             g.generateTexture('house_roof', roofW, roofH);
         }
+    }
+
+    createFireflyTexture() {
+        if (this.textures.exists('firefly')) return;
+        const g = this.make.graphics({ x: 0, y: 0, add: false });
+        g.fillStyle(0xfffee0, 1);
+        g.fillCircle(4, 4, 4);
+        g.generateTexture('firefly', 8, 8);
     }
 
     create() {
@@ -128,7 +140,8 @@ export default class MainScene extends Scene {
         this.createHouseRoof();
 
         this.selector = this.add.graphics();
-        this.selector.lineStyle(2, 0xffffff, 1);
+        // [MODIF] Sélecteur plus discret : ligne plus fine (1) et transparente (0.4)
+        this.selector.lineStyle(1, 0xffffff, 0.4);
         this.selector.beginPath(); this.selector.moveTo(0, -16); this.selector.lineTo(32, 0); this.selector.lineTo(0, 16); this.selector.lineTo(-32, 0); this.selector.closePath(); this.selector.strokePath();
         this.selector.setVisible(false);
         this.selector.setDepth(99999);
@@ -139,19 +152,14 @@ export default class MainScene extends Scene {
         this.cameras.main.startFollow(this.hero, true, 0.08, 0.08);
         this.cameras.main.setZoom(1.2);
 
-        // --- INPUTS GESTION ---
+        this.createAmbiance();
 
-        // 1. GESTION DU CLIC SUR UN OBJET (Arbre, Rocher)
         this.input.on('gameobjectup', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.Image) => {
-            // On vérifie si c'est bien un objet interactif de la map
             const gridX = gameObject.getData('gridX');
             const gridY = gameObject.getData('gridY');
 
             if (gridX !== undefined && gridY !== undefined) {
-                // C'est un arbre/rocher !
                 this.handleHarvestIntent(gridX, gridY);
-                // IMPORTANT : On signale qu'on vient de cliquer un objet
-                // pour ne pas déclencher le déplacement sur le sol juste après.
                 this.ignoreNextMapClick = true;
             }
         });
@@ -176,20 +184,38 @@ export default class MainScene extends Scene {
             else this.cameras.main.zoom = Math.min(2, this.cameras.main.zoom + zoomAmount);
         });
 
-        // 2. GESTION DU CLIC SUR LE SOL (Map)
         this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
             if (this.ignoreNextMapClick) {
                 this.ignoreNextMapClick = false;
                 return;
             }
 
-            // MODIFICATION ICI : On a retiré "&& !this.isMoving"
             if (!this.isDraggingMap) this.handleClick(pointer);
-
             this.isDraggingMap = false;
         });
 
         this.checkRoofVisibility(this.playerStore.position.x, this.playerStore.position.y);
+    }
+
+    createAmbiance() {
+        if (this.hero) {
+            this.fireflies = this.add.particles(0, 0, 'firefly', {
+                follow: this.hero,
+                emitZone: {
+                    type: 'random',
+                    source: new Phaser.Geom.Circle(0, 0, 300)
+                },
+                lifespan: { min: 4000, max: 8000 },
+                scale: { start: 0.5, end: 0 },
+                alpha: { start: 0, end: 0.8, yoyo: true },
+                speed: { min: 10, max: 25 },
+                gravityY: -5,
+                quantity: 1,
+                frequency: 500,
+                blendMode: 'ADD'
+            });
+            this.fireflies.setDepth(100000);
+        }
     }
 
     update() {
@@ -199,12 +225,14 @@ export default class MainScene extends Scene {
         if (this.isValidTile(coords.x, coords.y)) {
             this.selector?.setVisible(true);
             const isoPt = this.getIsoFromGrid(coords.x, coords.y);
-            this.selector?.setPosition(isoPt.x, isoPt.y);
+            // [MODIF] On abaisse le sélecteur de 12px pour coller visuellement à l'herbe
+            this.selector?.setPosition(isoPt.x, isoPt.y + 12);
 
+            // [MODIF] Style plus discret ici aussi (épaisseur 1, opacité 0.4)
             if (this.gridData[coords.y] && this.gridData[coords.y][coords.x] === 1) {
-                this.selector?.lineStyle(2, 0xeab308, 1);
+                this.selector?.lineStyle(1, 0xeab308, 0.6); // Jaune un peu plus visible
             } else {
-                this.selector?.lineStyle(2, 0xffffff, 1);
+                this.selector?.lineStyle(1, 0xffffff, 0.4); // Blanc discret
             }
         } else {
             this.selector?.setVisible(false);
@@ -275,31 +303,20 @@ export default class MainScene extends Scene {
     }
 
     startMove(x: number, y: number, onComplete: (() => void) | null) {
-        // 1. STOPPER TOUT MOUVEMENT EN COURS
-        // On arrête immédiatement l'animation du héros
         this.tweens.killTweensOf(this.hero);
-
-        // On vide le chemin précédent pour ne pas qu'il reprenne
         this.currentPath = [];
-
-        // Si on avait une action prévue (récolte), on l'annule car on change d'avis
-        // Sauf si le nouveau clic définit une nouvelle action (onComplete)
         this.pendingAction = onComplete;
 
-        // 2. CALCUL DU NOUVEAU CHEMIN
-        // Le point de départ est la position LOGIQUE actuelle du joueur
-        // (La case vers laquelle il se dirigeait ou sur laquelle il est)
         const startX = this.playerStore.position.x;
         const startY = this.playerStore.position.y;
 
         this.finder?.findPath(startX, startY, x, y, (path) => {
             if (path && path.length > 0) {
-                path.shift(); // On enlève la case actuelle
+                path.shift();
                 this.currentPath = path;
                 this.isMoving = true;
-                this.moveNextStep(); // On lance le mouvement immédiatement
+                this.moveNextStep();
             } else {
-                // Si on clique sur la case où on est déjà
                 if (startX === x && startY === y && this.pendingAction) {
                     this.pendingAction();
                     this.pendingAction = null;
@@ -374,31 +391,25 @@ export default class MainScene extends Scene {
 
     placeTile(x: number, y: number, key: string) {
         const pos = this.getIsoFromGrid(x, y);
-        const tile = this.add.image(pos.x, pos.y, key);
+
+        // Valeur utilisée pour le sol : 12
+        const tileYOffset = 12;
+
+        const tile = this.add.image(pos.x, pos.y + tileYOffset, key);
         tile.setOrigin(0.5, 0.5);
         tile.setDepth(-1000);
     }
 
     placeObject(x: number, y: number, key: string) {
         const pos = this.getIsoFromGrid(x, y);
-
-        // [FIX VISUEL] On descend l'objet de 10px pour qu'il s'ancre mieux dans l'herbe
-        const visualOffsetY = 10;
-
+        // [MODIF] Augmenté de 10 à 18 pour mieux ancrer les objets au sol
+        const visualOffsetY = 18;
         const obj = this.add.image(pos.x, pos.y + visualOffsetY, key);
         obj.setOrigin(0.5, 1);
-
-        // On garde le depth basé sur le Y "logique" de la grille, pas le Y modifié
         obj.setDepth(pos.y);
-
-        // [FIX CLIC] On rend l'objet interactif (cliquable)
-        // cursor: 'pointer' affiche la petite main quand on passe dessus
         obj.setInteractive({ cursor: 'pointer' });
-
-        // On stocke les coordonnées de grille DANS l'objet pour savoir où il est quand on clique dessus
         obj.setData('gridX', x);
         obj.setData('gridY', y);
-
         this.objectMap.set(`${x},${y}`, obj);
     }
 
