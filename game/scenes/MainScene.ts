@@ -9,6 +9,11 @@ export default class MainScene extends Scene {
     private mapSize = 50;
     private houseRect = { x: 15, y: 15, w: 6, h: 6 };
 
+    // CALIBRAGE VISUEL
+    // Valeur augmentée à 20 pour faire descendre les objets au centre de la tuile
+    // Si c'est encore un peu haut, essaie 22 ou 24. Si c'est trop bas, tente 15.
+    private ASSET_Y_OFFSET = 20;
+
     // OBJETS PHASER
     private tileGroup: Phaser.GameObjects.Group | null = null;
     private hero: Phaser.GameObjects.Image | null = null;
@@ -61,27 +66,22 @@ export default class MainScene extends Scene {
         const W = IsoMath.TILE_WIDTH;  // 64
         const H = IsoMath.TILE_HEIGHT; // 37
 
-        // 1. SOL ISOMÉTRIQUE PLAT (Pas d'épaisseur)
-        // On enlève le trait vertical qui te gênait
+        // 1. SOL VERT (Plat)
         const greens = [0xA5D6A7, 0x81C784, 0x66BB6A, 0x4CAF50, 0x43A047];
-
         greens.forEach((color, index) => {
             const key = `tile_flat_${index}`;
             if (!this.textures.exists(key)) {
                 const g = this.make.graphics({ x: 0, y: 0, add: false });
                 g.fillStyle(color, 1);
                 g.beginPath();
-                g.moveTo(W / 2, 0);       // Haut
-                g.lineTo(W, H / 2);       // Droite
-                g.lineTo(W / 2, H);       // Bas
-                g.lineTo(0, H / 2);       // Gauche
+                g.moveTo(W / 2, 0); g.lineTo(W, H / 2); g.lineTo(W / 2, H); g.lineTo(0, H / 2);
                 g.closePath();
                 g.fillPath();
                 g.generateTexture(key, W, H);
             }
         });
 
-        // 2. SOL MAISON (Parquet propre)
+        // 2. SOL MAISON
         if (!this.textures.exists('floor_wood')) {
             const g = this.make.graphics({ x: 0, y: 0, add: false });
             g.fillStyle(0x8D6E63, 1);
@@ -89,35 +89,24 @@ export default class MainScene extends Scene {
             g.moveTo(W / 2, 0); g.lineTo(W, H / 2); g.lineTo(W / 2, H); g.lineTo(0, H / 2);
             g.closePath();
             g.fillPath();
-            // Juste un contour discret
             g.lineStyle(1, 0x5D4037, 0.5);
             g.strokePath();
             g.generateTexture('floor_wood', W, H);
         }
 
-        // 3. TOIT MAISON (CORRECTION ISOMÉTRIQUE)
-        // On dessine un grand losange qui englobe toute la zone 6x6
+        // 3. TOIT MAISON
         if (!this.textures.exists('house_roof')) {
             const g = this.make.graphics({ x: 0, y: 0, add: false });
-
-            // Dimensions totales en pixels isométriques
-            // Note : En iso, c'est un peu plus complexe qu'une simple multiplication
-            // mais pour un bloc rectangulaire (6x6), ça forme un grand losange.
-
-            // On va tricher intelligemment : on génère une texture assez grande
-            // et on dessine le losange dedans.
             const totalW = this.houseRect.w * W;
             const totalH = this.houseRect.h * H;
-
-            // Centre du dessin
             const cx = totalW / 2;
 
             g.fillStyle(0x37474F, 1);
             g.beginPath();
-            g.moveTo(cx, 0);                // Sommet Haut
-            g.lineTo(totalW, totalH / 2);   // Sommet Droite
-            g.lineTo(cx, totalH);           // Sommet Bas
-            g.lineTo(0, totalH / 2);        // Sommet Gauche
+            g.moveTo(cx, 0);
+            g.lineTo(totalW, totalH / 2);
+            g.lineTo(cx, totalH);
+            g.lineTo(0, totalH / 2);
             g.closePath();
             g.fillPath();
 
@@ -180,7 +169,7 @@ export default class MainScene extends Scene {
 
         // SÉLECTEUR
         this.selector = this.add.graphics();
-        this.selector.lineStyle(2, 0xffffff, 0.8); // Plus visible
+        this.selector.lineStyle(2, 0xffffff, 0.6);
         const pts = IsoMath.getDebugPoints();
         this.selector.beginPath();
         this.selector.moveTo(pts[0].x, pts[0].y);
@@ -190,13 +179,12 @@ export default class MainScene extends Scene {
         this.selector.setVisible(false);
         this.selector.setDepth(99999);
 
-        // HÉROS & CAMÉRA
+        // HÉROS
         this.createHero(this.playerStore.position.x, this.playerStore.position.y);
         if (this.hero) this.hero.setTint(this.playerStore.color);
 
         this.cameras.main.startFollow(this.hero, true, 0.08, 0.08);
         this.cameras.main.setZoom(1.2);
-
         this.createAmbiance();
 
         // EVENTS
@@ -212,7 +200,6 @@ export default class MainScene extends Scene {
         this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
             this.dragStartX = pointer.x; this.dragStartY = pointer.y; this.isDraggingMap = false;
         });
-
         this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
             if (pointer.isDown) {
                 this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.cameras.main.zoom;
@@ -220,23 +207,19 @@ export default class MainScene extends Scene {
                 if (Phaser.Math.Distance.Between(pointer.x, pointer.y, this.dragStartX, this.dragStartY) > 5) this.isDraggingMap = true;
             }
         });
-
         this.input.on('wheel', (pointer: any, gameObjects: any, deltaX: number, deltaY: number) => {
             const zoomAmount = 0.1;
             if (deltaY > 0) this.cameras.main.zoom = Math.max(0.5, this.cameras.main.zoom - zoomAmount);
             else this.cameras.main.zoom = Math.min(2, this.cameras.main.zoom + zoomAmount);
         });
-
         this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
             if (this.ignoreNextMapClick) { this.ignoreNextMapClick = false; return; }
             if (!this.isDraggingMap) this.handleClick(pointer);
             this.isDraggingMap = false;
         });
-
         this.checkRoofVisibility(this.playerStore.position.x, this.playerStore.position.y);
     }
 
-    // --- AMBIANCE ---
     createAmbiance() {
         if (this.hero) {
             this.fireflies = this.add.particles(0, 0, 'firefly', {
@@ -251,7 +234,6 @@ export default class MainScene extends Scene {
         }
     }
 
-    // --- UPDATE LOOP ---
     update() {
         const worldPoint = this.input.activePointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
         const coords = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
@@ -259,25 +241,23 @@ export default class MainScene extends Scene {
         if (this.isValidTile(coords.x, coords.y)) {
             this.selector?.setVisible(true);
             const isoPt = IsoMath.gridToIso(coords.x, coords.y, this.mapOriginX, this.mapOriginY);
-            this.selector?.setPosition(isoPt.x, isoPt.y);
+            this.selector?.setPosition(isoPt.x, isoPt.y); // OFFSET RETIRÉ ICI CAR C'EST LE SOL
 
             if (this.gridData[coords.y] && this.gridData[coords.y][coords.x] === 1) {
                 this.selector?.lineStyle(2, 0xeab308, 0.8);
             } else {
-                this.selector?.lineStyle(2, 0xffffff, 0.8);
+                this.selector?.lineStyle(2, 0xffffff, 0.6);
             }
         } else {
             this.selector?.setVisible(false);
         }
     }
 
-    // --- GAMEPLAY LOGIC ---
     handleClick(pointer: Phaser.Input.Pointer) {
         const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
         const target = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
 
         if (!this.isValidTile(target.x, target.y)) return;
-
         if (this.gridData[target.y][target.x] === 1) {
             this.handleHarvestIntent(target.x, target.y);
             return;
@@ -288,15 +268,12 @@ export default class MainScene extends Scene {
     handleHarvestIntent(targetX: number, targetY: number) {
         const neighbors = [{ x: targetX + 1, y: targetY }, { x: targetX - 1, y: targetY }, { x: targetX, y: targetY + 1 }, { x: targetX, y: targetY - 1 }];
         const validNeighbors = neighbors.filter(n => this.isValidTile(n.x, n.y) && this.gridData[n.y][n.x] === 0);
-
         if (validNeighbors.length === 0) return;
-
         const bestSpot = validNeighbors.sort((a, b) => {
             const d1 = Phaser.Math.Distance.Between(this.playerStore.position.x, this.playerStore.position.y, a.x, a.y);
             const d2 = Phaser.Math.Distance.Between(this.playerStore.position.x, this.playerStore.position.y, b.x, b.y);
             return d1 - d2;
         })[0];
-
         this.startMove(bestSpot.x, bestSpot.y, () => { this.harvestResource(targetX, targetY); });
     }
 
@@ -316,7 +293,6 @@ export default class MainScene extends Scene {
                     this.objectMap.delete(key);
                     this.gridData[y][x] = 0;
                     this.finder?.setGrid(this.gridData);
-
                     if (itemDropped) this.playerStore.addItem(itemDropped);
                 }
             });
@@ -330,13 +306,9 @@ export default class MainScene extends Scene {
 
         const startX = this.playerStore.position.x;
         const startY = this.playerStore.position.y;
-
         this.finder?.findPath(startX, startY, x, y, (path) => {
             if (path && path.length > 0) {
-                path.shift();
-                this.currentPath = path;
-                this.isMoving = true;
-                this.moveNextStep();
+                path.shift(); this.currentPath = path; this.isMoving = true; this.moveNextStep();
             } else {
                 if (startX === x && startY === y && this.pendingAction) {
                     this.pendingAction(); this.pendingAction = null;
@@ -360,7 +332,6 @@ export default class MainScene extends Scene {
         this.checkRoofVisibility(nextTile.x, nextTile.y);
 
         const targetIso = IsoMath.gridToIso(nextTile.x, nextTile.y, this.mapOriginX, this.mapOriginY);
-
         this.tweens.add({
             targets: this.hero,
             x: targetIso.x,
@@ -372,22 +343,11 @@ export default class MainScene extends Scene {
         });
     }
 
-    // --- HELPERS ---
     createHouseRoof() {
-        // Calcul pour centrer le toit sur la maison
-        const gridCX = this.houseRect.x + (this.houseRect.w / 2); // Centre en cases
+        const gridCX = this.houseRect.x + (this.houseRect.w / 2);
         const gridCY = this.houseRect.y + (this.houseRect.h / 2);
-
-        // On doit viser le "centre" visuel de cet ensemble de cases
-        // Comme gridToIso vise le centre de la tuile, on doit ajuster un peu pour tomber entre les cases si la taille est paire.
-        // MAIS, pour simplifier : on prend le centre mathématique.
-
-        // Note importante : gridToIso(15, 15) donne le centre de la tuile 15,15.
-        // Le centre de la maison (qui fait 6x6) est à l'intersection entre la tuile 17 et 18 (15 + 3 = 18).
-        // On utilise -0.5 car nos coordonnées sont en "centre de tuile".
         const centerIso = IsoMath.gridToIso(gridCX - 0.5, gridCY - 0.5, this.mapOriginX, this.mapOriginY);
-
-        this.houseRoof = this.add.image(centerIso.x, centerIso.y - 120, 'house_roof'); // -120 pour le lever
+        this.houseRoof = this.add.image(centerIso.x, centerIso.y - 120, 'house_roof');
         this.houseRoof.setDepth(99999);
     }
 
@@ -399,7 +359,6 @@ export default class MainScene extends Scene {
 
     isValidTile(x: number, y: number) { return x >= 0 && x < this.mapSize && y >= 0 && y < this.mapSize; }
 
-    // PLACEMENT
     placeTile(x: number, y: number, key: string) {
         const pos = IsoMath.gridToIso(x, y, this.mapOriginX, this.mapOriginY);
         const tile = this.add.image(pos.x, pos.y, key);
@@ -407,18 +366,16 @@ export default class MainScene extends Scene {
         tile.setDepth(-1000);
     }
 
-    // C'EST ICI QUE TOUT SE JOUE POUR LE CENTRAGE
     placeObject(x: number, y: number, key: string) {
         const pos = IsoMath.gridToIso(x, y, this.mapOriginX, this.mapOriginY);
-        const obj = this.add.image(pos.x, pos.y, key);
 
-        // (0.5, 1) = Les pieds au CENTRE EXACT de la tuile (Norme Dofus)
-        // Si tu trouves que c'est trop haut visuellement (ça cache le centre),
-        // tu peux changer le Y de l'objet (pos.y + 10 par exemple).
-        // Mais pour l'instant, on reste sur le standard strict.
+        // Offset augmenté à +20 pour centrer visuellement
+        const visualY = pos.y + this.ASSET_Y_OFFSET;
+
+        const obj = this.add.image(pos.x, visualY, key);
         obj.setOrigin(0.5, 1);
+        obj.setDepth(visualY); // Profondeur basée sur la position visuelle
 
-        obj.setDepth(pos.y);
         obj.setInteractive({ cursor: 'pointer' });
         obj.setData('gridX', x); obj.setData('gridY', y);
         this.objectMap.set(`${x},${y}`, obj);
