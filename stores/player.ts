@@ -1,14 +1,20 @@
 import { defineStore } from 'pinia';
 
+// Interface pour un objet groupé
+export interface InventoryItem {
+    name: string;
+    count: number;
+}
+
 export const usePlayerStore = defineStore('player', {
     state: () => ({
         username: 'Voyageur',
-        color: 0xe11d48,
+        color: 0xe11d48, // Rose/Rouge par défaut
         position: { x: 0, y: 0 },
         level: 1,
         xp: 0,
-        // Inventaire simple : liste de chaînes de caractères
-        inventory: [] as string[],
+        // On passe d'une liste de strings à une liste d'objets {name, count}
+        inventory: [] as InventoryItem[],
     }),
     actions: {
         move(x: number, y: number) {
@@ -20,9 +26,16 @@ export const usePlayerStore = defineStore('player', {
         changeColor(newColor: number) {
             this.color = newColor;
         },
-        addItem(item: string) {
-            this.inventory.push(item);
-            console.log(`[Store] Ajout de ${item} à l'inventaire. Total: ${this.inventory.length}`);
+        // Cette action reste compatible avec MainScene qui envoie juste "Bois" ou "Pierre"
+        addItem(itemName: string) {
+            const existingItem = this.inventory.find(i => i.name === itemName);
+
+            if (existingItem) {
+                existingItem.count++;
+            } else {
+                this.inventory.push({ name: itemName, count: 1 });
+            }
+            console.log(`[Store] Ajout de ${itemName}. Inventaire:`, this.inventory);
         }
     }
 });
