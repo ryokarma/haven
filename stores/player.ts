@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { GameConfig } from '@/game/config/GameConfig';
 
 // Interface pour un objet groupé
 export interface InventoryItem {
@@ -6,15 +7,29 @@ export interface InventoryItem {
     count: number;
 }
 
+export interface PlayerState {
+    username: string;
+    color: number;
+    position: { x: number; y: number };
+    level: number;
+    xp: number;
+    inventory: InventoryItem[];
+    stats: {
+        energy: number;
+        maxEnergy: number;
+        hunger: number;
+        maxHunger: number;
+    };
+}
+
 export const usePlayerStore = defineStore('player', {
-    state: () => ({
+    state: (): PlayerState => ({
         username: 'Voyageur',
         color: 0xe11d48, // Rose/Rouge par défaut
         position: { x: 0, y: 0 },
         level: 1,
         xp: 0,
-        // On passe d'une liste de strings à une liste d'objets {name, count}
-        inventory: [] as InventoryItem[],
+        inventory: [],
         // Système de survie
         stats: {
             energy: 100,
@@ -53,7 +68,8 @@ export const usePlayerStore = defineStore('player', {
             // Diminue l'énergie de 0.5 point (moins rapide que la faim)
             this.stats.energy = Math.max(0, this.stats.energy - 0.5);
 
-            console.log(`[Store] Stats dégradées - Faim: ${this.stats.hunger}, Énergie: ${this.stats.energy}`);
+            // LOG SPAM REDUCTION: Commented out for production readiness
+            // console.log(`[Store] Stats dégradées - Faim: ${this.stats.hunger}, Énergie: ${this.stats.energy}`);
         },
 
         // Consomme un item pour restaurer des stats
@@ -65,14 +81,7 @@ export const usePlayerStore = defineStore('player', {
                 return;
             }
 
-            // Configuration des effets par item
-            const itemEffects: { [key: string]: { hunger?: number; energy?: number } } = {
-                'Pomme': { hunger: 10, energy: 5 },
-                'Bois': { energy: 2 }, // Le bois peut servir de combustible = petite énergie
-                'Pierre': { hunger: 2 }, // Pierre = minéraux ?
-            };
-
-            const effect = itemEffects[itemName];
+            const effect = GameConfig.ITEM_EFFECTS[itemName];
 
             if (effect) {
                 if (effect.hunger) {

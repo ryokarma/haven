@@ -7,6 +7,7 @@ import { PathfindingManager } from '@/game/managers/PathfindingManager';
 import { TileManager } from '@/game/managers/TileManager';
 import { ObjectManager } from '@/game/managers/ObjectManager';
 import { AmbianceManager } from '@/game/managers/AmbianceManager';
+import { MapManager } from '@/game/managers/MapManager';
 import { TileSelector } from '@/game/ui/TileSelector';
 import { Player } from '@/game/entities/Player';
 
@@ -20,14 +21,14 @@ export default class MainScene extends Scene {
     private tileManager!: TileManager;
     private objectManager!: ObjectManager;
     private ambianceManager!: AmbianceManager;
+    private mapManager!: MapManager;
     private tileSelector!: TileSelector;
     private textureGenerator!: TextureGenerator;
 
     // Entities
     private player!: Player;
 
-    // État du jeu
-    private gridData: number[][] = [];
+    // Visuals
     private houseRoof: Phaser.GameObjects.Image | null = null;
 
     // État de mouvement
@@ -45,8 +46,10 @@ export default class MainScene extends Scene {
     private dragStartY = 0;
     private ignoreNextMapClick = false;
 
-    // Store
-    private playerStore: any = null;
+    // Store (Typed)
+    private playerStore!: ReturnType<typeof usePlayerStore>;
+    // Timer
+    private survivalTimer!: Phaser.Time.TimerEvent;
 
     constructor() {
         super('MainScene');
@@ -56,7 +59,7 @@ export default class MainScene extends Scene {
         // Chargement des assets externes
         this.load.image('tree', '/assets/tree.png');
         this.load.image('rock', '/assets/rock.png');
-
+        // Fallback or generated assets
         // Génération des textures procédurales
         this.textureGenerator = new TextureGenerator(this);
         this.textureGenerator.generateAll();
@@ -74,11 +77,21 @@ export default class MainScene extends Scene {
         this.objectManager = new ObjectManager(this);
         this.ambianceManager = new AmbianceManager(this);
 
+        // Map Manager (Handles Data & Generation)
+        this.mapManager = new MapManager(
+            this,
+            this.tileManager,
+            this.objectManager,
+            this.mapOriginX,
+            this.mapOriginY
+        );
+
         // Génération de la carte
-        this.generateMap();
+        this.mapManager.generate();
+        const gridData = this.mapManager.gridData;
 
         // Initialisation du pathfinding avec déplacements diagonaux
-        this.pathfindingManager = new PathfindingManager(this.gridData);
+        this.pathfindingManager = new PathfindingManager(gridData);
 
         // Création du toit de la maison
         this.createHouseRoof();
@@ -121,13 +134,16 @@ export default class MainScene extends Scene {
         this.checkRoofVisibility(playerPos.x, playerPos.y);
 
         // Timer pour le système de survie - dégrade les stats toutes les 5 secondes
-        this.time.addEvent({
-            delay: 5000, // 5 secondes
+        this.survivalTimer = this.time.addEvent({
+            delay: 5000,
             callback: () => {
                 this.playerStore.tickStats();
             },
             loop: true
         });
+
+        // Cleanup on shutdown
+        this.events.once('shutdown', this.shutdown, this);
     }
 
     override update() {
@@ -135,7 +151,7 @@ export default class MainScene extends Scene {
         this.tileSelector.update(
             this.input.activePointer,
             this.cameras.main,
-            this.gridData
+            this.mapManager.gridData
         );
 
         // Mise à jour de l'ambiance (parallaxe fond)
@@ -143,136 +159,18 @@ export default class MainScene extends Scene {
     }
 
     /**
-     * Génère la carte du jeu
+     * Nettoyage des ressources à la fermeture de la scène
      */
-    /**
-     * Génère la carte du jeu
-     */
-    private generateMap(): void {
-        // 1. Initialisation de la grille vide (tout à 0)
-        this.gridData = [];
-        for (let y = 0; y < GameConfig.MAP_SIZE; y++) {
-            const col: number[] = [];
-            for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
-                col.push(0);
-            }
-            this.gridData.push(col);
-        }
+    private shutdown() {
+        if (this.survivalTimer) this.survivalTimer.destroy();
+        this.input.off('gameobjectup');
+        this.input.off('pointerdown');
+        this.input.off('pointermove');
+        this.input.off('wheel');
+        this.input.off('pointerup');
 
-        // 2. Placement des lacs (avant les obstacles pour qu'ils soient prioritaires)
-        this.placeLakes();
-
-        // 3. Placement des tuiles visuelles et des obstacles
-        for (let y = 0; y < GameConfig.MAP_SIZE; y++) {
-            if (!this.gridData[y]) continue;
-
-            for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
-                let cellType = this.gridData[y][x];
-                const isInHouse = this.isInsideHouse(x, y);
-
-                // Si la case est vide (0) et pas dans la maison ni au start, chance d'obstacle
-                if (cellType === 0 && !isInHouse && (x !== 0 || y !== 0)) {
-                    if (Math.random() < GameConfig.MAP_GENERATION.obstacleChance) {
-                        cellType = 1;
-                        this.gridData[y][x] = 1; // Mettre à jour la grille
-                    }
-                }
-
-                let tileKey = '';
-                if (isInHouse) {
-                    tileKey = 'floor_wood';
-                    // Force le type 0 dans la maison au cas où
-                    if (cellType !== 0) {
-                        cellType = 0;
-                        this.gridData[y][x] = 0;
-                    }
-                } else if (cellType === 2) {
-                    // Tuile d'eau
-                    tileKey = 'tile_flat_0';
-                } else {
-                    tileKey = this.tileManager.getRandomTileKey();
-                }
-
-                // Placer la tuile
-                this.tileManager.placeTile(
-                    x,
-                    y,
-                    tileKey,
-                    this.mapOriginX,
-                    this.mapOriginY,
-                    this.gridData,
-                    cellType
-                );
-
-                // Placer l'objet si c'est un obstacle
-                if (cellType === 1) {
-                    const type = Math.random() > GameConfig.MAP_GENERATION.treeVsRockRatio
-                        ? 'tree'
-                        : 'rock';
-                    this.objectManager.placeObject(x, y, type, this.mapOriginX, this.mapOriginY);
-                }
-            }
-        }
-    }
-
-    /**
-     * Place des lacs de taille fixe avec espacement minimum
-     */
-    private placeLakes(): void {
-        const lakesConfig = GameConfig.MAP_GENERATION.lakes;
-        const lakeCenters: { x: number, y: number }[] = [];
-        const attempts = lakesConfig.attempts;
-
-        for (let i = 0; i < attempts; i++) {
-            // Choisir une taille aléatoire (3x3 ou 4x4)
-            const size = Phaser.Math.RND.pick(lakesConfig.sizes);
-
-            // Choisir une position aléatoire (en gardant une marge pour que le lac soit entier)
-            const x = Phaser.Math.Between(1, GameConfig.MAP_SIZE - size - 1);
-            const y = Phaser.Math.Between(1, GameConfig.MAP_SIZE - size - 1);
-
-            // Vérifier les conflits (Maison, Start)
-            const lakeRect = new Phaser.Geom.Rectangle(x, y, size, size);
-
-            // Zone de la maison (avec marge)
-            const houseRect = new Phaser.Geom.Rectangle(
-                GameConfig.HOUSE.x - 2,
-                GameConfig.HOUSE.y - 2,
-                GameConfig.HOUSE.width + 4,
-                GameConfig.HOUSE.height + 4
-            );
-
-            // Zone de départ (avec marge)
-            const startRect = new Phaser.Geom.Rectangle(0, 0, 5, 5);
-
-            if (Phaser.Geom.Rectangle.Overlaps(lakeRect, houseRect) ||
-                Phaser.Geom.Rectangle.Overlaps(lakeRect, startRect)) {
-                continue;
-            }
-
-            // Vérifier la distance avec les autres lacs
-            let tooClose = false;
-            for (const center of lakeCenters) {
-                const dist = Phaser.Math.Distance.Between(x + size / 2, y + size / 2, center.x, center.y);
-                if (dist < lakesConfig.minDistance) {
-                    tooClose = true;
-                    break;
-                }
-            }
-
-            if (tooClose) continue;
-
-            // Placer le lac
-            for (let ly = 0; ly < size; ly++) {
-                if (!this.gridData[y + ly]) continue;
-                for (let lx = 0; lx < size; lx++) {
-                    this.gridData[y + ly][x + lx] = 2; // Type Eau
-                }
-            }
-
-            // Enregistrer le centre
-            lakeCenters.push({ x: x + size / 2, y: y + size / 2 });
-        }
+        if (this.tileManager) this.tileManager.destroy();
+        // Add other destroy calls if managers implement them
     }
 
     /**
@@ -309,7 +207,7 @@ export default class MainScene extends Scene {
         });
 
         // Zoom avec la molette
-        this.input.on('wheel', (pointer: any, gameObjects: any, deltaX: number, deltaY: number) => {
+        this.input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: unknown[], deltaX: number, deltaY: number) => {
             if (deltaY > 0) {
                 this.cameras.main.zoom = Math.max(
                     GameConfig.CAMERA.minZoom,
@@ -342,10 +240,12 @@ export default class MainScene extends Scene {
     private handleClick(pointer: Phaser.Input.Pointer): void {
         const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
         const target = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
+        const gridData = this.mapManager.gridData;
 
         if (!this.isValidTile(target.x, target.y)) return;
 
-        if (this.gridData[target.y] && this.gridData[target.y][target.x] === 1) {
+        // Récolte
+        if (gridData[target.y] && gridData[target.y][target.x] === 1) {
             this.handleHarvestIntent(target.x, target.y);
             return;
         }
@@ -357,6 +257,8 @@ export default class MainScene extends Scene {
      * Gère l'intention de récolter une ressource
      */
     private handleHarvestIntent(targetX: number, targetY: number): void {
+        const gridData = this.mapManager.gridData;
+
         // Trouve les tuiles adjacentes (incluant les diagonales)
         const neighbors = [
             { x: targetX + 1, y: targetY },
@@ -371,8 +273,8 @@ export default class MainScene extends Scene {
 
         const validNeighbors = neighbors.filter(n =>
             this.isValidTile(n.x, n.y) &&
-            this.gridData[n.y] &&
-            this.gridData[n.y][n.x] === 0
+            gridData[n.y] &&
+            gridData[n.y][n.x] === 0
         );
 
         if (validNeighbors.length === 0) return;
@@ -412,10 +314,10 @@ export default class MainScene extends Scene {
                     else if (textureKey === 'rock') itemDropped = 'Pierre';
 
                     this.objectManager.removeObject(x, y);
-                    if (this.gridData[y]) {
-                        this.gridData[y][x] = 0;
-                        this.pathfindingManager.updateGrid(this.gridData);
-                    }
+
+                    // Mise à jour Data
+                    this.mapManager.updateCell(x, y, 0);
+                    this.pathfindingManager.updateGrid(this.mapManager.gridData);
 
                     if (itemDropped) {
                         this.playerStore.addItem(itemDropped);
@@ -497,24 +399,13 @@ export default class MainScene extends Scene {
     private checkRoofVisibility(x: number, y: number): void {
         if (!this.houseRoof) return;
 
-        const isInHouse = this.isInsideHouse(x, y);
+        // Use mapManager for reuse of logic
+        const isInHouse = this.mapManager.isInsideHouse(x, y);
         this.tweens.add({
             targets: this.houseRoof,
             alpha: isInHouse ? 0.2 : 1,
             duration: 300
         });
-    }
-
-    /**
-     * Vérifie si une position est à l'intérieur de la maison
-     */
-    private isInsideHouse(x: number, y: number): boolean {
-        return (
-            x >= GameConfig.HOUSE.x &&
-            x < GameConfig.HOUSE.x + GameConfig.HOUSE.width &&
-            y >= GameConfig.HOUSE.y &&
-            y < GameConfig.HOUSE.y + GameConfig.HOUSE.height
-        );
     }
 
     /**

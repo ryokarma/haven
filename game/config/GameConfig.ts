@@ -71,6 +71,13 @@ export class GameConfig {
         0x4CAF50,
         0x43A047
     ];
+
+    // Effets des objets consommables
+    static readonly ITEM_EFFECTS: Record<string, { hunger?: number; energy?: number }> = {
+        'Pomme': { hunger: 10, energy: 5 },
+        'Bois': { energy: 2 },
+        'Pierre': { hunger: 2 }
+    };
 }
 
 /**
