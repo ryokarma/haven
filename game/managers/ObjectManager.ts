@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { IsoMath } from '../utils/IsoMath';
-import { GameConfig } from '../config/GameConfig';
+import { GameConfig, ASSET_MANIFEST } from '../config/GameConfig';
 
 /**
  * Gestionnaire d'objets
@@ -16,26 +16,38 @@ export class ObjectManager {
     }
 
     /**
-     * Place un objet à une position de la grille
+     * Place un objet à une position de la grille en utilisant le Manifest
      */
     placeObject(
         x: number,
         y: number,
-        key: string,
-        originX: number,
-        originY: number
+        type: string,
+        mapOriginX: number,
+        mapOriginY: number
     ): Phaser.GameObjects.Image {
-        const pos = IsoMath.gridToIso(x, y, originX, originY);
-        const visualY = pos.y + GameConfig.ASSET_Y_OFFSET;
+        const pos = IsoMath.gridToIso(x, y, mapOriginX, mapOriginY);
 
-        const obj = this.scene.add.image(pos.x, visualY, key);
-        obj.setOrigin(0.5, 1);
-        obj.setDepth(visualY);
+        // Récupération de la config depuis le manifest ou fallback par défaut
+        const config = ASSET_MANIFEST[type] || {
+            assetKey: type,
+            pixelHeight: 64,
+            originX: 0.5,
+            originY: 1.0
+        };
+
+        // Création de l'image avec les paramètres du manifest
+        const obj = this.scene.add.image(pos.x, pos.y, config.assetKey);
+        obj.setOrigin(config.originX, config.originY);
+
+        // La profondeur est basée sur la position Y au sol pour un tri correct
+        obj.setDepth(pos.y);
+
         obj.setInteractive({ cursor: 'pointer' });
         obj.setData('gridX', x);
         obj.setData('gridY', y);
 
         this.objectMap.set(`${x},${y}`, obj);
+
         return obj;
     }
 

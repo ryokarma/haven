@@ -72,3 +72,37 @@ export class GameConfig {
         0x43A047
     ];
 }
+
+/**
+ * Définition technique d'un asset graphique
+ */
+export interface AssetDefinition {
+    assetKey: string;     // Nom du fichier/clé texture
+    pixelHeight: number;  // Hauteur de l'image (ref)
+    originX: number;      // Ancrage horizontal (0.5 = milieu)
+    originY: number;      // Ancrage vertical (1.0 = bas, idéal pour iso)
+}
+
+/**
+ * Manifeste centralisé des assets du jeu
+ */
+export const ASSET_MANIFEST: Record<string, AssetDefinition> = {
+    'tree': {
+        assetKey: 'tree',
+        pixelHeight: 128, // Hauteur hypothétique
+        originX: 0.5,
+        originY: 0.82     // Ajustement final
+    },
+    'rock': {
+        assetKey: 'rock',
+        pixelHeight: 64,
+        originX: 0.5,
+        originY: 0.72     // Ajustement final
+    },
+    'fountain_placeholder': {
+        assetKey: 'rock', // Utilise rock en attendant
+        pixelHeight: 96,
+        originX: 0.5,
+        originY: 0.78
+    }
+};

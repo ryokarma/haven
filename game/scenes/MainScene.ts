@@ -137,6 +137,9 @@ export default class MainScene extends Scene {
             this.cameras.main,
             this.gridData
         );
+
+        // Mise à jour de l'ambiance (parallaxe fond)
+        this.ambianceManager.update();
     }
 
     /**
