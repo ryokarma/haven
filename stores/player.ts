@@ -15,6 +15,13 @@ export const usePlayerStore = defineStore('player', {
         xp: 0,
         // On passe d'une liste de strings à une liste d'objets {name, count}
         inventory: [] as InventoryItem[],
+        // Système de survie
+        stats: {
+            energy: 100,
+            maxEnergy: 100,
+            hunger: 100,
+            maxHunger: 100
+        }
     }),
     actions: {
         move(x: number, y: number) {
@@ -36,6 +43,55 @@ export const usePlayerStore = defineStore('player', {
                 this.inventory.push({ name: itemName, count: 1 });
             }
             console.log(`[Store] Ajout de ${itemName}. Inventaire:`, this.inventory);
+        },
+
+        // Dégrade les stats au fil du temps
+        tickStats() {
+            // Diminue la faim de 1 point
+            this.stats.hunger = Math.max(0, this.stats.hunger - 1);
+
+            // Diminue l'énergie de 0.5 point (moins rapide que la faim)
+            this.stats.energy = Math.max(0, this.stats.energy - 0.5);
+
+            console.log(`[Store] Stats dégradées - Faim: ${this.stats.hunger}, Énergie: ${this.stats.energy}`);
+        },
+
+        // Consomme un item pour restaurer des stats
+        consumeItem(itemName: string) {
+            const item = this.inventory.find(i => i.name === itemName);
+
+            if (!item || item.count === 0) {
+                console.warn(`[Store] Impossible de consommer ${itemName} - Item introuvable ou quantité nulle`);
+                return;
+            }
+
+            // Configuration des effets par item
+            const itemEffects: { [key: string]: { hunger?: number; energy?: number } } = {
+                'Pomme': { hunger: 10, energy: 5 },
+                'Bois': { energy: 2 }, // Le bois peut servir de combustible = petite énergie
+                'Pierre': { hunger: 2 }, // Pierre = minéraux ?
+            };
+
+            const effect = itemEffects[itemName];
+
+            if (effect) {
+                if (effect.hunger) {
+                    this.stats.hunger = Math.min(this.stats.maxHunger, this.stats.hunger + effect.hunger);
+                }
+                if (effect.energy) {
+                    this.stats.energy = Math.min(this.stats.maxEnergy, this.stats.energy + effect.energy);
+                }
+
+                // Retire l'item de l'inventaire
+                item.count--;
+                if (item.count === 0) {
+                    this.inventory = this.inventory.filter(i => i.name !== itemName);
+                }
+
+                console.log(`[Store] ${itemName} consommé ! Faim: ${this.stats.hunger}, Énergie: ${this.stats.energy}`);
+            } else {
+                console.warn(`[Store] ${itemName} n'a pas d'effet défini`);
+            }
         }
     }
 });

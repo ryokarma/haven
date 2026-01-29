@@ -119,9 +119,18 @@ export default class MainScene extends Scene {
         // Vérifier la visibilité du toit
         const playerPos = this.player.getGridPosition();
         this.checkRoofVisibility(playerPos.x, playerPos.y);
+
+        // Timer pour le système de survie - dégrade les stats toutes les 5 secondes
+        this.time.addEvent({
+            delay: 5000, // 5 secondes
+            callback: () => {
+                this.playerStore.tickStats();
+            },
+            loop: true
+        });
     }
 
-    update() {
+    override update() {
         // Mise à jour du sélecteur de tuile
         this.tileSelector.update(
             this.input.activePointer,
@@ -133,37 +142,133 @@ export default class MainScene extends Scene {
     /**
      * Génère la carte du jeu
      */
+    /**
+     * Génère la carte du jeu
+     */
     private generateMap(): void {
+        // 1. Initialisation de la grille vide (tout à 0)
+        this.gridData = [];
         for (let y = 0; y < GameConfig.MAP_SIZE; y++) {
             const col: number[] = [];
+            for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
+                col.push(0);
+            }
+            this.gridData.push(col);
+        }
+
+        // 2. Placement des lacs (avant les obstacles pour qu'ils soient prioritaires)
+        this.placeLakes();
+
+        // 3. Placement des tuiles visuelles et des obstacles
+        for (let y = 0; y < GameConfig.MAP_SIZE; y++) {
+            if (!this.gridData[y]) continue;
 
             for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
+                let cellType = this.gridData[y][x];
                 const isInHouse = this.isInsideHouse(x, y);
-                let isObstacle = false;
-                let tileKey = '';
 
+                // Si la case est vide (0) et pas dans la maison ni au start, chance d'obstacle
+                if (cellType === 0 && !isInHouse && (x !== 0 || y !== 0)) {
+                    if (Math.random() < GameConfig.MAP_GENERATION.obstacleChance) {
+                        cellType = 1;
+                        this.gridData[y][x] = 1; // Mettre à jour la grille
+                    }
+                }
+
+                let tileKey = '';
                 if (isInHouse) {
-                    isObstacle = false;
                     tileKey = 'floor_wood';
+                    // Force le type 0 dans la maison au cas où
+                    if (cellType !== 0) {
+                        cellType = 0;
+                        this.gridData[y][x] = 0;
+                    }
+                } else if (cellType === 2) {
+                    // Tuile d'eau
+                    tileKey = 'tile_flat_0';
                 } else {
-                    // Ne pas placer d'obstacle sur la position de départ
-                    isObstacle = (Math.random() < GameConfig.MAP_GENERATION.obstacleChance)
-                        && (x !== 0 || y !== 0);
                     tileKey = this.tileManager.getRandomTileKey();
                 }
 
-                col.push(isObstacle ? 1 : 0);
-                this.tileManager.placeTile(x, y, tileKey, this.mapOriginX, this.mapOriginY);
+                // Placer la tuile
+                this.tileManager.placeTile(
+                    x,
+                    y,
+                    tileKey,
+                    this.mapOriginX,
+                    this.mapOriginY,
+                    this.gridData,
+                    cellType
+                );
 
-                if (isObstacle) {
+                // Placer l'objet si c'est un obstacle
+                if (cellType === 1) {
                     const type = Math.random() > GameConfig.MAP_GENERATION.treeVsRockRatio
                         ? 'tree'
                         : 'rock';
                     this.objectManager.placeObject(x, y, type, this.mapOriginX, this.mapOriginY);
                 }
             }
+        }
+    }
 
-            this.gridData.push(col);
+    /**
+     * Place des lacs de taille fixe avec espacement minimum
+     */
+    private placeLakes(): void {
+        const lakesConfig = GameConfig.MAP_GENERATION.lakes;
+        const lakeCenters: { x: number, y: number }[] = [];
+        const attempts = lakesConfig.attempts;
+
+        for (let i = 0; i < attempts; i++) {
+            // Choisir une taille aléatoire (3x3 ou 4x4)
+            const size = Phaser.Math.RND.pick(lakesConfig.sizes);
+
+            // Choisir une position aléatoire (en gardant une marge pour que le lac soit entier)
+            const x = Phaser.Math.Between(1, GameConfig.MAP_SIZE - size - 1);
+            const y = Phaser.Math.Between(1, GameConfig.MAP_SIZE - size - 1);
+
+            // Vérifier les conflits (Maison, Start)
+            const lakeRect = new Phaser.Geom.Rectangle(x, y, size, size);
+
+            // Zone de la maison (avec marge)
+            const houseRect = new Phaser.Geom.Rectangle(
+                GameConfig.HOUSE.x - 2,
+                GameConfig.HOUSE.y - 2,
+                GameConfig.HOUSE.width + 4,
+                GameConfig.HOUSE.height + 4
+            );
+
+            // Zone de départ (avec marge)
+            const startRect = new Phaser.Geom.Rectangle(0, 0, 5, 5);
+
+            if (Phaser.Geom.Rectangle.Overlaps(lakeRect, houseRect) ||
+                Phaser.Geom.Rectangle.Overlaps(lakeRect, startRect)) {
+                continue;
+            }
+
+            // Vérifier la distance avec les autres lacs
+            let tooClose = false;
+            for (const center of lakeCenters) {
+                const dist = Phaser.Math.Distance.Between(x + size / 2, y + size / 2, center.x, center.y);
+                if (dist < lakesConfig.minDistance) {
+                    tooClose = true;
+                    break;
+                }
+            }
+
+            if (tooClose) continue;
+
+            // Placer le lac
+            for (let ly = 0; ly < size; ly++) {
+                if (!this.gridData[y + ly]) continue;
+                for (let lx = 0; lx < size; lx++) {
+                    this.gridData[y + ly][x + lx] = 2; // Type Eau
+                }
+            }
+
+            // Enregistrer le centre
+            lakeCenters.push({ x: x + size / 2, y: y + size / 2 });
         }
     }
 
@@ -190,7 +295,7 @@ export default class MainScene extends Scene {
 
         // Déplacement de la carte
         this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-            if (pointer.isDown) {
+            if (pointer.isDown && pointer.prevPosition) {
                 this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.cameras.main.zoom;
                 this.cameras.main.scrollY -= (pointer.y - pointer.prevPosition.y) / this.cameras.main.zoom;
 
@@ -237,7 +342,7 @@ export default class MainScene extends Scene {
 
         if (!this.isValidTile(target.x, target.y)) return;
 
-        if (this.gridData[target.y][target.x] === 1) {
+        if (this.gridData[target.y] && this.gridData[target.y][target.x] === 1) {
             this.handleHarvestIntent(target.x, target.y);
             return;
         }
@@ -262,7 +367,9 @@ export default class MainScene extends Scene {
         ];
 
         const validNeighbors = neighbors.filter(n =>
-            this.isValidTile(n.x, n.y) && this.gridData[n.y][n.x] === 0
+            this.isValidTile(n.x, n.y) &&
+            this.gridData[n.y] &&
+            this.gridData[n.y][n.x] === 0
         );
 
         if (validNeighbors.length === 0) return;
@@ -274,9 +381,11 @@ export default class MainScene extends Scene {
             return d1 - d2;
         })[0];
 
-        this.startMove(bestSpot.x, bestSpot.y, () => {
-            this.harvestResource(targetX, targetY);
-        });
+        if (bestSpot) {
+            this.startMove(bestSpot.x, bestSpot.y, () => {
+                this.harvestResource(targetX, targetY);
+            });
+        }
     }
 
     /**
@@ -300,8 +409,10 @@ export default class MainScene extends Scene {
                     else if (textureKey === 'rock') itemDropped = 'Pierre';
 
                     this.objectManager.removeObject(x, y);
-                    this.gridData[y][x] = 0;
-                    this.pathfindingManager.updateGrid(this.gridData);
+                    if (this.gridData[y]) {
+                        this.gridData[y][x] = 0;
+                        this.pathfindingManager.updateGrid(this.gridData);
+                    }
 
                     if (itemDropped) {
                         this.playerStore.addItem(itemDropped);

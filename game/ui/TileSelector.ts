@@ -34,13 +34,15 @@ export class TileSelector {
         );
 
         const pts = IsoMath.getDebugPoints();
-        this.graphics.beginPath();
-        this.graphics.moveTo(pts[0].x, pts[0].y);
-        for (let i = 1; i < pts.length; i++) {
-            this.graphics.lineTo(pts[i].x, pts[i].y);
+        if (pts.length > 0) {
+            this.graphics.beginPath();
+            this.graphics.moveTo(pts[0]!.x, pts[0]!.y);
+            for (let i = 1; i < pts.length; i++) {
+                this.graphics.lineTo(pts[i]!.x, pts[i]!.y);
+            }
+            this.graphics.closePath();
+            this.graphics.strokePath();
         }
-        this.graphics.closePath();
-        this.graphics.strokePath();
         this.graphics.setVisible(false);
         this.graphics.setDepth(99999);
     }
@@ -57,8 +59,12 @@ export class TileSelector {
             const isoPt = IsoMath.gridToIso(coords.x, coords.y, this.mapOriginX, this.mapOriginY);
             this.graphics.setPosition(isoPt.x, isoPt.y);
 
-            // Change la couleur selon si c'est un obstacle ou non
-            if (gridData[coords.y] && gridData[coords.y][coords.x] === 1) {
+            // Change la couleur selon si c'est un obstacle ou de l'eau (non marchable)
+            const isWalkable = gridData[coords.y] &&
+                gridData[coords.y][coords.x] !== undefined &&
+                gridData[coords.y][coords.x] === 0;
+
+            if (!isWalkable) {
                 this.graphics.clear();
                 this.graphics.lineStyle(
                     GameConfig.SELECTOR.lineWidth,
@@ -75,13 +81,15 @@ export class TileSelector {
             }
 
             const pts = IsoMath.getDebugPoints();
-            this.graphics.beginPath();
-            this.graphics.moveTo(pts[0].x, pts[0].y);
-            for (let i = 1; i < pts.length; i++) {
-                this.graphics.lineTo(pts[i].x, pts[i].y);
+            if (pts.length > 0) {
+                this.graphics.beginPath();
+                this.graphics.moveTo(pts[0].x, pts[0].y);
+                for (let i = 1; i < pts.length; i++) {
+                    this.graphics.lineTo(pts[i].x, pts[i].y);
+                }
+                this.graphics.closePath();
+                this.graphics.strokePath();
             }
-            this.graphics.closePath();
-            this.graphics.strokePath();
         } else {
             this.graphics.setVisible(false);
         }

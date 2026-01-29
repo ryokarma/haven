@@ -32,6 +32,11 @@ const getIcon = (name: string) => {
   if (name === 'Pierre') return icons.stone;
   return '📦'; 
 };
+
+// Fonction pour consommer un item
+const handleItemClick = (itemName: string) => {
+  player.consumeItem(itemName);
+};
 </script>
 
 <template>
@@ -45,10 +50,38 @@ const getIcon = (name: string) => {
             </div>
         </div>
 
-        <div class="flex flex-col gap-1">
+        <div class="flex flex-col gap-1.5">
              <div class="flex items-center gap-2">
                 <span class="font-serif text-xl font-bold text-white drop-shadow-md">{{ player.username }}</span>
              </div>
+             
+             <!-- Barres de stats -->
+             <div class="flex flex-col gap-1">
+                <!-- Barre de Faim -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-bold text-green-400 w-12">FAIM</span>
+                  <div class="w-32 h-2 bg-black/40 rounded-full border border-white/10 overflow-hidden">
+                    <div 
+                      class="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-300"
+                      :style="{ width: `${(player.stats.hunger / player.stats.maxHunger) * 100}%` }"
+                    ></div>
+                  </div>
+                  <span class="text-[10px] font-mono text-white/70">{{ Math.floor(player.stats.hunger) }}</span>
+                </div>
+                
+                <!-- Barre d'Énergie -->
+                <div class="flex items-center gap-2">
+                  <span class="text-[10px] font-bold text-blue-400 w-12">ÉNERGIE</span>
+                  <div class="w-32 h-2 bg-black/40 rounded-full border border-white/10 overflow-hidden">
+                    <div 
+                      class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
+                      :style="{ width: `${(player.stats.energy / player.stats.maxEnergy) * 100}%` }"
+                    ></div>
+                  </div>
+                  <span class="text-[10px] font-mono text-white/70">{{ Math.floor(player.stats.energy) }}</span>
+                </div>
+             </div>
+             
              <div class="flex items-center gap-2 text-xs font-mono text-slate-300 bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm border border-white/5 w-fit">
                 <span>X: {{ player.position.x }}</span>
                 <span class="text-white/20">|</span>
@@ -77,7 +110,8 @@ const getIcon = (name: string) => {
         
         <div v-else class="grid grid-cols-4 gap-3">
             <div v-for="(item, idx) in player.inventory" :key="idx" 
-                 class="group relative aspect-square flex flex-col items-center justify-center rounded-xl border border-white/5 bg-white/5 transition-all hover:bg-white/10 hover:border-amber-400/30 cursor-pointer">
+                 @click="handleItemClick(item.name)"
+                 class="group relative aspect-square flex flex-col items-center justify-center rounded-xl border border-white/5 bg-white/5 transition-all hover:bg-white/10 hover:border-amber-400/30 hover:scale-105 cursor-pointer active:scale-95">
                
                <span v-html="getIcon(item.name)" class="text-amber-200 mb-1 drop-shadow-lg"></span>
                
@@ -86,6 +120,9 @@ const getIcon = (name: string) => {
                </span>
                
                <span class="text-[10px] text-slate-300 font-medium tracking-wide">{{ item.name }}</span>
+               
+               <!-- Indicateur de clic -->
+               <div class="absolute inset-0 rounded-xl bg-amber-400/0 group-hover:bg-amber-400/10 transition-colors pointer-events-none"></div>
             </div>
         </div>
 
