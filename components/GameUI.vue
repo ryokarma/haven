@@ -56,29 +56,31 @@ const handleItemClick = (itemName: string) => {
              </div>
              
              <!-- Barres de stats -->
-             <div class="flex flex-col gap-1">
-                <!-- Barre de Faim -->
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] font-bold text-green-400 w-12">FAIM</span>
-                  <div class="w-32 h-2 bg-black/40 rounded-full border border-white/10 overflow-hidden">
+             <div class="flex flex-col gap-2 mt-2">
+                <div v-for="(stat, key) in [
+                    { label: 'SANTÉ', value: player.stats.health, max: player.stats.maxHealth, color: 'bg-red-500', gradient: 'from-red-500 to-red-400' },
+                    { label: 'ÉNERGIE', value: player.stats.energy, max: player.stats.maxEnergy, color: 'bg-yellow-400', gradient: 'from-yellow-400 to-yellow-300' },
+                    { label: 'FAIM', value: player.stats.hunger, max: player.stats.maxHunger, color: 'bg-orange-500', gradient: 'from-orange-500 to-orange-400' },
+                    { label: 'SOIF', value: player.stats.thirst, max: player.stats.maxThirst, color: 'bg-cyan-400', gradient: 'from-cyan-400 to-cyan-300' }
+                ]" :key="key" class="group relative flex items-center gap-3">
+                  
+                  <!-- Label -->
+                  <span class="text-[10px] font-bold text-white/80 w-12 tracking-wider">{{ stat.label }}</span>
+                  
+                  <!-- Barre Background -->
+                  <div class="relative w-32 h-2.5 bg-slate-900/60 rounded-full border border-white/10 overflow-hidden shadow-inner">
+                    <!-- Barre Remplissage -->
                     <div 
-                      class="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-300"
-                      :style="{ width: `${(player.stats.hunger / player.stats.maxHunger) * 100}%` }"
+                      class="h-full bg-gradient-to-r transition-all duration-300 ease-out shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+                      :class="stat.gradient"
+                      :style="{ width: `${(stat.value / stat.max) * 100}%` }"
                     ></div>
                   </div>
-                  <span class="text-[10px] font-mono text-white/70">{{ Math.floor(player.stats.hunger) }}</span>
-                </div>
-                
-                <!-- Barre d'Énergie -->
-                <div class="flex items-center gap-2">
-                  <span class="text-[10px] font-bold text-blue-400 w-12">ÉNERGIE</span>
-                  <div class="w-32 h-2 bg-black/40 rounded-full border border-white/10 overflow-hidden">
-                    <div 
-                      class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
-                      :style="{ width: `${(player.stats.energy / player.stats.maxEnergy) * 100}%` }"
-                    ></div>
+
+                  <!-- Tooltip (au survol) -->
+                  <div class="absolute left-full ml-2 px-2 py-1 bg-black/80 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 backdrop-blur-sm border border-white/10">
+                    {{ Math.floor(stat.value) }} / {{ stat.max }}
                   </div>
-                  <span class="text-[10px] font-mono text-white/70">{{ Math.floor(player.stats.energy) }}</span>
                 </div>
              </div>
              

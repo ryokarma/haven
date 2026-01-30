@@ -15,10 +15,14 @@ export interface PlayerState {
     xp: number;
     inventory: InventoryItem[];
     stats: {
+        health: number;
+        maxHealth: number;
         energy: number;
         maxEnergy: number;
         hunger: number;
         maxHunger: number;
+        thirst: number;
+        maxThirst: number;
     };
 }
 
@@ -30,12 +34,16 @@ export const usePlayerStore = defineStore('player', {
         level: 1,
         xp: 0,
         inventory: [],
-        // Système de survie
+        // Système de survie complet
         stats: {
+            health: 100,
+            maxHealth: 100,
             energy: 100,
             maxEnergy: 100,
             hunger: 100,
-            maxHunger: 100
+            maxHunger: 100, // 100 = Rassasié, 0 = Affamé
+            thirst: 100,
+            maxThirst: 100  // 100 = Hydraté, 0 = Assoiffé
         }
     }),
     actions: {
@@ -60,16 +68,55 @@ export const usePlayerStore = defineStore('player', {
             console.log(`[Store] Ajout de ${itemName}. Inventaire:`, this.inventory);
         },
 
-        // Dégrade les stats au fil du temps
-        tickStats() {
-            // Diminue la faim de 1 point
-            this.stats.hunger = Math.max(0, this.stats.hunger - 1);
+        // Helpers pour modifier les stats de manière sécurisée
+        updateStats(changes: Partial<PlayerState['stats']>) {
+            if (changes.health !== undefined) this.stats.health = Math.max(0, Math.min(this.stats.maxHealth, changes.health));
+            if (changes.energy !== undefined) this.stats.energy = Math.max(0, Math.min(this.stats.maxEnergy, changes.energy));
+            if (changes.hunger !== undefined) this.stats.hunger = Math.max(0, Math.min(this.stats.maxHunger, changes.hunger));
+            if (changes.thirst !== undefined) this.stats.thirst = Math.max(0, Math.min(this.stats.maxThirst, changes.thirst));
+        },
 
-            // Diminue l'énergie de 0.5 point (moins rapide que la faim)
-            this.stats.energy = Math.max(0, this.stats.energy - 0.5);
+        // Dégrade les stats au fil du temps (Appelé chaque seconde)
+        tickVitality(isMoving: boolean) {
+            // Règle 4 (Métabolisme de base) : Faim et Soif baissent constamment
+            const metabolismRate = 0.05;
+            let currentHunger = this.stats.hunger - metabolismRate;
+            let currentThirst = this.stats.thirst - metabolismRate;
 
-            // LOG SPAM REDUCTION: Commented out for production readiness
-            // console.log(`[Store] Stats dégradées - Faim: ${this.stats.hunger}, Énergie: ${this.stats.energy}`);
+            // Règle 1 (Fatigue naturelle)
+            let currentEnergy = this.stats.energy - 0.1;
+
+            // Règle 2 & 3 (Repos et Condition de repos)
+            if (!isMoving) {
+                // Le joueur récupère seulement s'il n'est pas affamé ni assoiffé (> 20)
+                if (this.stats.hunger > 20 && this.stats.thirst > 20) {
+                    currentEnergy += 1; // Bonus de régénération
+                }
+            }
+
+            // Application des changements via updateStats pour le clamping
+            this.updateStats({
+                hunger: currentHunger,
+                thirst: currentThirst,
+                energy: currentEnergy
+            });
+
+            // Gestion des dégâts critiques (Faim/Soif à 0)
+            if (this.stats.hunger <= 0 || this.stats.thirst <= 0) {
+                this.updateStats({ health: this.stats.health - 2 });
+                if (this.stats.health <= 0) {
+                    console.warn("Joueur mort de faim ou de soif !");
+                }
+            }
+            // Régénération de vie (Si tout va bien)
+            else if (this.stats.health < this.stats.maxHealth && this.stats.hunger > 80 && this.stats.thirst > 80) {
+                this.updateStats({ health: this.stats.health + 1 });
+            }
+        },
+
+        // Consomme de l'énergie (action immédiate)
+        consumeEnergy(amount: number) {
+            this.updateStats({ energy: this.stats.energy - amount });
         },
 
         // Consomme un item pour restaurer des stats
@@ -84,12 +131,14 @@ export const usePlayerStore = defineStore('player', {
             const effect = GameConfig.ITEM_EFFECTS[itemName];
 
             if (effect) {
-                if (effect.hunger) {
-                    this.stats.hunger = Math.min(this.stats.maxHunger, this.stats.hunger + effect.hunger);
-                }
-                if (effect.energy) {
-                    this.stats.energy = Math.min(this.stats.maxEnergy, this.stats.energy + effect.energy);
-                }
+                const changes: Partial<PlayerState['stats']> = {};
+                if (effect.hunger) changes.hunger = this.stats.hunger + effect.hunger;
+                if (effect.energy) changes.energy = this.stats.energy + effect.energy;
+
+                // Si l'item donne de l'eau (non implémenté encore dans GameConfig, mais prévu)
+                // if (effect.thirst) changes.thirst = this.stats.thirst + effect.thirst;
+
+                this.updateStats(changes);
 
                 // Retire l'item de l'inventaire
                 item.count--;
@@ -97,7 +146,7 @@ export const usePlayerStore = defineStore('player', {
                     this.inventory = this.inventory.filter(i => i.name !== itemName);
                 }
 
-                console.log(`[Store] ${itemName} consommé ! Faim: ${this.stats.hunger}, Énergie: ${this.stats.energy}`);
+                console.log(`[Store] ${itemName} consommé !`);
             } else {
                 console.warn(`[Store] ${itemName} n'a pas d'effet défini`);
             }

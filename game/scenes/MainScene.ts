@@ -141,11 +141,12 @@ export default class MainScene extends Scene {
         const playerPos = this.player.getGridPosition();
         this.checkRoofVisibility(playerPos.x, playerPos.y);
 
-        // Timer pour le système de survie - dégrade les stats toutes les 5 secondes
+        // Timer pour le système de survie (Faim/Soif/Énergie) - 1s Tick
         this.survivalTimer = this.time.addEvent({
-            delay: 5000,
+            delay: 1000,
             callback: () => {
-                this.playerStore.tickStats();
+                // On passe l'état "isMoving" pour ajuster la fatigue
+                this.playerStore.tickVitality(this.isMoving);
             },
             loop: true
         });
@@ -346,6 +347,19 @@ export default class MainScene extends Scene {
 
         this.pathfindingManager.findPath(playerPos.x, playerPos.y, x, y, (path) => {
             if (path && path.length > 0) {
+                // Calcul du coût en énergie pour le trajet total
+                // On exclut la première tuile (position actuelle)
+                const pathCost = path.length - 1;
+
+                if (this.playerStore.stats.energy < pathCost) {
+                    console.log(`[MainScene] Pas assez d'énergie ! Besoin: ${pathCost}, Dispo: ${Math.floor(this.playerStore.stats.energy)}`);
+                    // TODO: Feedback UI "Pas assez d'énergie"
+
+                    // On peut imaginer d'annuler tout le mouvement, ou de bouger jusqu'à épuisement.
+                    // Pour l'exercice : on empêche le départ.
+                    return;
+                }
+
                 path.shift(); // Retirer la position actuelle
                 this.currentPath = path;
                 this.isMoving = true;
@@ -377,6 +391,10 @@ export default class MainScene extends Scene {
         if (!nextTile) return;
 
         this.playerStore.move(nextTile.x, nextTile.y);
+
+        // Consommation d'énergie par pas
+        this.playerStore.consumeEnergy(1);
+
         this.checkRoofVisibility(nextTile.x, nextTile.y);
 
         this.player.animateMoveTo(
