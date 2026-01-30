@@ -113,6 +113,7 @@ const handleItemClick = (itemName: string) => {
         <div v-else class="grid grid-cols-4 gap-3">
             <div v-for="(item, idx) in player.inventory" :key="idx" 
                  @click="handleItemClick(item.name)"
+                 title="Cliquer pour consommer"
                  class="group relative aspect-square flex flex-col items-center justify-center rounded-xl border border-white/5 bg-white/5 transition-all hover:bg-white/10 hover:border-amber-400/30 hover:scale-105 cursor-pointer active:scale-95">
                
                <span v-html="getIcon(item.name)" class="text-amber-200 mb-1 drop-shadow-lg"></span>

@@ -45,6 +45,17 @@ export class ObjectManager {
         obj.setInteractive({ cursor: 'pointer' });
         obj.setData('gridX', x);
         obj.setData('gridY', y);
+        obj.setData('type', type); // Sauvegarde du type de base
+
+        // Logique spécifique pour les arbres (Pommiers)
+        if (type === 'tree') {
+            // Utilise Math.random() ou le RNG de la scène si disponible (ici simple random pour l'effet visuel)
+            // Note: Idéalement il faudrait utiliser le RNG seedé du MapManager, mais ObjectManager est agnostique.
+            if (Math.random() < 0.2) {
+                obj.setTint(0xFFaaaa); // Teinte rougeâtre
+                obj.setData('subType', 'apple_tree');
+            }
+        }
 
         this.objectMap.set(`${x},${y}`, obj);
 

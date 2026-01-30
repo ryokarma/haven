@@ -24,6 +24,7 @@ export interface PlayerState {
         thirst: number;
         maxThirst: number;
     };
+    lastActionFeedback: string;
 }
 
 export const usePlayerStore = defineStore('player', {
@@ -44,7 +45,8 @@ export const usePlayerStore = defineStore('player', {
             maxHunger: 100, // 100 = Rassasié, 0 = Affamé
             thirst: 100,
             maxThirst: 100  // 100 = Hydraté, 0 = Assoiffé
-        }
+        },
+        lastActionFeedback: ''
     }),
     actions: {
         move(x: number, y: number) {
@@ -131,14 +133,37 @@ export const usePlayerStore = defineStore('player', {
             const effect = GameConfig.ITEM_EFFECTS[itemName];
 
             if (effect) {
+                // Vérifier si la consommation est utile (pas de gaspillage)
+                let isUseful = false;
+
+                if (effect.hunger && this.stats.hunger < this.stats.maxHunger) isUseful = true;
+                if (effect.thirst && this.stats.thirst < this.stats.maxThirst) isUseful = true;
+                if (effect.energy && this.stats.energy < this.stats.maxEnergy) isUseful = true;
+                if (effect.health && this.stats.health < this.stats.maxHealth) isUseful = true;
+
+                if (!isUseful) {
+                    console.log(`[Store] ${itemName} non consommé - Stats déjà au max`);
+                    return;
+                }
+
                 const changes: Partial<PlayerState['stats']> = {};
                 if (effect.hunger) changes.hunger = this.stats.hunger + effect.hunger;
                 if (effect.energy) changes.energy = this.stats.energy + effect.energy;
-
-                // Si l'item donne de l'eau (non implémenté encore dans GameConfig, mais prévu)
-                // if (effect.thirst) changes.thirst = this.stats.thirst + effect.thirst;
+                if (effect.thirst) changes.thirst = this.stats.thirst + effect.thirst;
+                if (effect.health) changes.health = this.stats.health + effect.health;
 
                 this.updateStats(changes);
+
+                // Construction du message de feedback
+                const feedbackParts = [];
+                if (effect.hunger) feedbackParts.push(`+${effect.hunger} Faim`);
+                if (effect.thirst) feedbackParts.push(`+${effect.thirst} Soif`);
+                if (effect.energy) feedbackParts.push(`+${effect.energy} Énergie`);
+                if (effect.health) feedbackParts.push(`+${effect.health} Santé`);
+
+                // Mettre à jour le feedback pour l'UI / Phaser
+                // On ajoute un timestamp pour forcer le watcher à réagir même si le message est identique
+                this.lastActionFeedback = `${feedbackParts.join(' | ')}#${Date.now()}`;
 
                 // Retire l'item de l'inventaire
                 item.count--;

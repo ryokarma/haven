@@ -252,8 +252,23 @@ export default class MainScene extends Scene {
         const gridData = this.mapManager.gridData;
 
         if (!this.isValidTile(target.x, target.y)) return;
+        const playerPos = this.player.getGridPosition();
+        const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, target.x, target.y);
 
-        // Récolte
+        // Interaction avec l'eau (Récolte)
+        // ID 2 correspond à l'eau dans MapManager
+        if (gridData[target.y]?.[target.x] === 2) {
+            if (dist < 2) {
+                this.playerStore.addItem('Flasque d\'eau');
+                const isoPos = IsoMath.gridToIso(target.x, target.y, this.mapOriginX, this.mapOriginY);
+                this.showFloatingText(isoPos.x, isoPos.y - 50, "+1 Flasque d'eau", "#06b6d4"); // Cyan
+            } else {
+                console.log("Trop loin de l'eau !");
+            }
+            return;
+        }
+
+        // Récolte Objet
         if (gridData[target.y]?.[target.x] === 1) {
             this.handleHarvestIntent(target.x, target.y);
             return;
@@ -266,6 +281,30 @@ export default class MainScene extends Scene {
      * Gère l'intention de récolter une ressource
      */
     private handleHarvestIntent(targetX: number, targetY: number): void {
+        const object = this.objectManager.getObject(targetX, targetY);
+        const playerPos = this.player.getGridPosition();
+        const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, targetX, targetY);
+
+        // Interaction spéciale : Pommier (sans détruire l'arbre)
+        if (object && object.getData('subType') === 'apple_tree') {
+            if (dist < 2) {
+                this.playerStore.addItem('Pomme');
+
+                const objectPos = IsoMath.gridToIso(targetX, targetY, this.mapOriginX, this.mapOriginY);
+                this.showFloatingText(objectPos.x, objectPos.y - 50, "+1 Pomme", "#ef4444"); // Rouge
+
+                // Animation de secousse
+                this.tweens.add({
+                    targets: object,
+                    x: object.x + 3,
+                    yoyo: true,
+                    duration: 50,
+                    repeat: 5
+                });
+                return;
+            }
+        }
+
         const gridData = this.mapManager.gridData;
 
         // Trouve les tuiles adjacentes (incluant les diagonales)
@@ -287,7 +326,6 @@ export default class MainScene extends Scene {
 
         if (validNeighbors.length === 0) return;
 
-        const playerPos = this.player.getGridPosition();
         const bestSpot = validNeighbors.sort((a, b) => {
             const d1 = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, a.x, a.y);
             const d2 = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, b.x, b.y);
@@ -329,6 +367,7 @@ export default class MainScene extends Scene {
 
                     if (itemDropped) {
                         this.playerStore.addItem(itemDropped);
+                        this.showFloatingText(object.x, object.y - 50, `+1 ${itemDropped}`, "#fbbf24"); // Ambre/Jaune
                     }
                 }
             });
@@ -430,6 +469,33 @@ export default class MainScene extends Scene {
             targets: this.houseRoof,
             alpha: isInHouse ? 0.2 : 1,
             duration: 300
+        });
+    }
+
+    /**
+     * Affiche un texte flottant au-dessus d'une position
+     */
+    public showFloatingText(x: number, y: number, message: string, color: string = '#ffffff'): void {
+        const text = this.add.text(x, y - 20, message, {
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            fontStyle: 'bold',
+            color: color,
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        text.setOrigin(0.5, 0.5);
+        text.setDepth(999999); // Toujours au-dessus
+
+        this.tweens.add({
+            targets: text,
+            y: y - 70,
+            alpha: 0,
+            duration: 1500,
+            ease: 'Power1',
+            onComplete: () => {
+                text.destroy();
+            }
         });
     }
 

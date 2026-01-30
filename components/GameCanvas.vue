@@ -8,7 +8,12 @@ import { onMounted, onUnmounted } from 'vue';
 import Phaser from 'phaser';
 import MainScene from '@/game/scenes/MainScene';
 
+import { usePlayerStore } from '@/stores/player';
+import { IsoMath } from '@/game/utils/IsoMath';
+import { GameConfig } from '@/game/config/GameConfig';
+
 let game: Phaser.Game | null = null;
+const player = usePlayerStore();
 
 // Configuration mise à jour pour le redimensionnement
 const config: Phaser.Types.Core.GameConfig = {
@@ -32,6 +37,27 @@ const config: Phaser.Types.Core.GameConfig = {
     arcade: { debug: false }
   }
 };
+
+// Watcher pour le feedback visuel (Consommation d'objets)
+import { watch } from 'vue';
+watch(() => player.lastActionFeedback, (newVal) => {
+    if (!newVal || !game) return;
+    
+    // Le format est "Message#Timestamp"
+    const message = newVal.split('#')[0];
+    if (!message) return;
+
+    // Récupérer la scène
+    const mainScene = game.scene.getScene('MainScene') as MainScene;
+    if (mainScene && mainScene.showFloatingText) {
+        // Position du joueur
+        const isoPos = IsoMath.gridToIso(player.position.x, player.position.y, 
+            GameConfig.MAP_SIZE * (IsoMath.TILE_WIDTH / 2), 
+            100 // MapOriginY hardcodé dans MainScene (on devrait idéalement l'exporter)
+        );
+        mainScene.showFloatingText(isoPos.x, isoPos.y - 80, message, '#22c55e'); // Vert
+    }
+});
 
 onMounted(() => {
   game = new Phaser.Game(config);
