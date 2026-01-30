@@ -1,8 +1,9 @@
 import { Scene } from 'phaser';
 import { GameConfig } from '../config/GameConfig';
-import { IsoMath } from '../utils/IsoMath';
 import { TileManager } from './TileManager';
 import { ObjectManager } from './ObjectManager';
+import { Perlin } from '../utils/Perlin';
+import { useWorldStore } from '../../stores/world';
 
 /**
  * Gère la génération et les données de la carte
@@ -14,6 +15,7 @@ export class MapManager {
     private _gridData: number[][] = [];
     private mapOriginX: number;
     private mapOriginY: number;
+    private rnd: Phaser.Math.RandomDataGenerator;
 
     constructor(
         scene: Scene,
@@ -27,6 +29,7 @@ export class MapManager {
         this.objectManager = objectManager;
         this.mapOriginX = mapOriginX;
         this.mapOriginY = mapOriginY;
+        this.rnd = new Phaser.Math.RandomDataGenerator();
     }
 
     /**
@@ -37,11 +40,25 @@ export class MapManager {
     }
 
     /**
-     * Génère la carte complète (terrain, lacs, obstacles)
+     * Génère la carte complète (terrain, lacs, obstacles) avec seed
      */
     generate(): void {
+        const worldStore = useWorldStore();
+        // Initialisation de la seed si pas encore faite (juste au cas où)
+        if (!worldStore.worldSeed) {
+            worldStore.initSeed();
+        }
+
+        console.log(`[MapManager] Génération avec seed: ${worldStore.worldSeed}`);
+        // Initialiser le RNG local avec la seed
+        this.rnd.sow([worldStore.worldSeed]);
+
+        // Initialiser le bruit de Perlin
+        const perlin = new Perlin(this.rnd);
+
+        // TODO: Pour des tailles de carte > 100x100, envisager le Chunking ou WebWorker pour éviter de bloquer le thread principal.
         this.initGrid();
-        this.placeLakes();
+        this.generateTerrain(perlin);
         this.finalizeMap();
     }
 
@@ -60,60 +77,39 @@ export class MapManager {
     }
 
     /**
-     * Place les lacs procéduraux
+     * Génère le terrain (lacs) via Perlin Noise
      */
-    private placeLakes(): void {
-        const lakesConfig = GameConfig.MAP_GENERATION.lakes;
-        const lakeCenters: { x: number, y: number }[] = [];
-        const attempts = lakesConfig.attempts;
+    private generateTerrain(perlin: Perlin): void {
+        const { scale, waterThreshold } = GameConfig.MAP_GENERATION.noise;
 
-        for (let i = 0; i < attempts; i++) {
-            const size = Phaser.Math.RND.pick(lakesConfig.sizes);
-            const x = Phaser.Math.Between(1, GameConfig.MAP_SIZE - size - 1);
-            const y = Phaser.Math.Between(1, GameConfig.MAP_SIZE - size - 1);
+        for (let y = 0; y < GameConfig.MAP_SIZE; y++) {
+            const row = this._gridData[y];
+            if (!row) continue;
 
-            // Vérification des zones protégées
-            const lakeRect = new Phaser.Geom.Rectangle(x, y, size, size);
+            for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
+                // Zone protégée (Maison)
+                if (this.isInsideHouse(x, y)) continue;
 
-            // Zone maison
-            const houseRect = new Phaser.Geom.Rectangle(
-                GameConfig.HOUSE.x - 2,
-                GameConfig.HOUSE.y - 2,
-                GameConfig.HOUSE.width + 4,
-                GameConfig.HOUSE.height + 4
-            );
+                // Zone de départ protégée (pas d'eau au spawn)
+                if (x < 10 && y < 10) continue;
 
-            // Zone départ
-            const startRect = new Phaser.Geom.Rectangle(0, 0, 5, 5);
+                // Génération du bruit (valeur entre -1 et 1 environ)
+                const noiseValue = perlin.noise(x * scale, y * scale);
 
-            if (Phaser.Geom.Rectangle.Overlaps(lakeRect, houseRect) ||
-                Phaser.Geom.Rectangle.Overlaps(lakeRect, startRect)) {
-                continue;
-            }
+                // Normalisation 0-1 (optionnel, mais noise brute est ok avec threshold adapté)
+                // Ici on utilise directement la valeur du bruit. 
+                // Pour Simplex/Perlin, c'est souvent entre -1 et 1.
+                // On peut le mapper à 0-1 : (val + 1) / 2
 
-            // Vérification distance autres lacs
-            let tooClose = false;
-            for (const center of lakeCenters) {
-                const dist = Phaser.Math.Distance.Between(x + size / 2, y + size / 2, center.x, center.y);
-                if (dist < lakesConfig.minDistance) {
-                    tooClose = true;
-                    break;
+                // Si on a config waterThreshold = 0.3 (config actuelle), ça suppose une valeur positive ?
+                // Le commentaire disait "Les valeurs sous 0.3". 
+                // Adaptons: (noise + 1) / 2 => range 0..1
+                const normalizedNoise = (noiseValue + 1) / 2;
+
+                if (normalizedNoise < waterThreshold) {
+                    row[x] = 2; // Eau
                 }
             }
-
-            if (tooClose) continue;
-
-            // Application
-            // Application
-            for (let ly = 0; ly < size; ly++) {
-                const mapRow = this._gridData[y + ly];
-                if (!mapRow) continue;
-
-                for (let lx = 0; lx < size; lx++) {
-                    mapRow[x + lx] = 2; // Eau
-                }
-            }
-            lakeCenters.push({ x: x + size / 2, y: y + size / 2 });
         }
     }
 
@@ -122,29 +118,32 @@ export class MapManager {
      */
     private finalizeMap(): void {
         for (let y = 0; y < GameConfig.MAP_SIZE; y++) {
-            if (!this._gridData[y]) continue;
+            const row = this._gridData[y];
+            if (!row) continue;
 
             for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
-                let cellType = this._gridData[y][x];
+                let cellType = row[x];
                 const isInHouse = this.isInsideHouse(x, y);
 
                 // Chance d'obstacle
-                if (cellType === 0 && !isInHouse && (x !== 0 || y !== 0)) {
-                    if (Math.random() < GameConfig.MAP_GENERATION.obstacleChance) {
+                if (cellType === 0 && !isInHouse && (x > 5 || y > 5)) {
+                    // Utilisation du RNG seedé
+                    if (this.rnd.frac() < GameConfig.MAP_GENERATION.obstacleChance) {
                         cellType = 1;
-                        this._gridData[y][x] = 1;
+                        row[x] = 1;
                     }
                 }
 
                 let tileKey = '';
                 if (isInHouse) {
                     tileKey = 'floor_wood';
+                    // Nettoyer si jamais du noise a mis de l'eau (double check)
                     if (cellType !== 0) {
                         cellType = 0;
-                        this._gridData[y][x] = 0;
+                        row[x] = 0;
                     }
                 } else if (cellType === 2) {
-                    tileKey = 'tile_flat_0'; // Placeholder eau
+                    tileKey = 'tile_flat_0'; // Placeholder eau - l'autotiling gérera ça
                 } else {
                     tileKey = this.tileManager.getRandomTileKey();
                 }
@@ -159,7 +158,7 @@ export class MapManager {
 
                 // Affichage Objet
                 if (cellType === 1) {
-                    const type = Math.random() > GameConfig.MAP_GENERATION.treeVsRockRatio ? 'tree' : 'rock';
+                    const type = this.rnd.frac() > GameConfig.MAP_GENERATION.treeVsRockRatio ? 'tree' : 'rock';
                     this.objectManager.placeObject(x, y, type, this.mapOriginX, this.mapOriginY);
                 }
             }

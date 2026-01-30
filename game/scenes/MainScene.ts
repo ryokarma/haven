@@ -114,14 +114,22 @@ export default class MainScene extends Scene {
         );
         this.player.setTint(this.playerStore.color);
 
-        // Configuration de la caméra
+        // Configuration de la caméra - Game Feel
+        // 1. Centrage immédiat (Teleport) pour éviter le traveling au chargement
+        this.cameras.main.centerOn(this.player.getSprite().x, this.player.getSprite().y);
+
+        // 2. Suivi fluide (Lerp) + Deadzone (Zone morte au centre)
         this.cameras.main.startFollow(
             this.player.getSprite(),
             true,
-            GameConfig.MOVEMENT.cameraSmoothness,
+            GameConfig.MOVEMENT.cameraSmoothness, // 0.08
             GameConfig.MOVEMENT.cameraSmoothness
         );
+        this.cameras.main.setDeadzone(50, 50);
+
+        // 3. Zoom et rendering
         this.cameras.main.setZoom(GameConfig.CAMERA.initialZoom);
+        this.cameras.main.setRoundPixels(true); // Optimisation rendu
 
         // Création de l'ambiance
         this.ambianceManager.createFireflies(this.player.getSprite());
@@ -245,7 +253,7 @@ export default class MainScene extends Scene {
         if (!this.isValidTile(target.x, target.y)) return;
 
         // Récolte
-        if (gridData[target.y] && gridData[target.y][target.x] === 1) {
+        if (gridData[target.y]?.[target.x] === 1) {
             this.handleHarvestIntent(target.x, target.y);
             return;
         }
@@ -273,8 +281,7 @@ export default class MainScene extends Scene {
 
         const validNeighbors = neighbors.filter(n =>
             this.isValidTile(n.x, n.y) &&
-            gridData[n.y] &&
-            gridData[n.y][n.x] === 0
+            gridData[n.y]?.[n.x] === 0
         );
 
         if (validNeighbors.length === 0) return;

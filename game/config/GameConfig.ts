@@ -4,7 +4,7 @@
  */
 export class GameConfig {
     // Taille de la carte
-    static readonly MAP_SIZE = 50;
+    static readonly MAP_SIZE = 100;
 
     // Dimensions de la maison
     static readonly HOUSE = {
@@ -21,11 +21,16 @@ export class GameConfig {
     static readonly MAP_GENERATION = {
         obstacleChance: 0.15,
         treeVsRockRatio: 0.5,
-        // Configuration des lacs
+        // Configuration du bruit de Perlin pour l'eau
+        noise: {
+            scale: 0.04,        // Un zoom de 0.04 donne des structures d'environ 25 blocs
+            waterThreshold: 0.3 // Les valeurs sous 0.3 deviennent de l'eau
+        },
+        // Configuration des lacs (Legacy / Complémentaire si besoin)
         lakes: {
-            attempts: 10,   // Nombre d'essais pour placer des lacs
-            minDistance: 30, // Distance minimum entre les lacs
-            sizes: [3, 4]    // Tailles possibles (3x3 ou 4x4)
+            attempts: 5,
+            minDistance: 30,
+            sizes: [3, 4]
         }
     };
 
