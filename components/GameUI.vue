@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { usePlayerStore } from '@/stores/player';
+import CraftingWindow from './CraftingWindow.vue';
 
 const player = usePlayerStore();
 const isInventoryOpen = ref(false);
+const isCraftingOpen = ref(false);
 
 // --- CHAT ---
 interface Message { author: string; text: string; }
@@ -132,6 +134,11 @@ const handleItemClick = (itemName: string) => {
       </div>
     </div>
 
+    <CraftingWindow 
+        v-if="isCraftingOpen" 
+        @close="isCraftingOpen = false" 
+    />
+
     <div class="flex w-full items-end justify-between gap-4">
       
       <div class="pointer-events-auto flex w-80 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/60 p-4 backdrop-blur-xl shadow-lg transition-colors hover:bg-slate-900/70">
@@ -152,6 +159,16 @@ const handleItemClick = (itemName: string) => {
       </div>
 
       <div class="pointer-events-auto flex items-center gap-3">
+          <!-- Bouton Crafting -->
+          <button 
+            @click="isCraftingOpen = !isCraftingOpen" 
+            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
+            title="Artisanat"
+          >
+             <span class="text-2xl">🛠️</span>
+          </button>
+
+          <!-- Bouton Inventaire -->
           <button 
             @click="isInventoryOpen = !isInventoryOpen" 
             class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"

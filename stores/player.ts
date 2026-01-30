@@ -25,6 +25,14 @@ export interface PlayerState {
         maxThirst: number;
     };
     lastActionFeedback: string;
+    recipes: Recipe[];
+}
+
+export interface Recipe {
+    id: string;
+    name: string;
+    inputs: Record<string, number>;
+    output: { name: string; count: number };
 }
 
 export const usePlayerStore = defineStore('player', {
@@ -46,7 +54,15 @@ export const usePlayerStore = defineStore('player', {
             thirst: 100,
             maxThirst: 100  // 100 = Hydraté, 0 = Assoiffé
         },
-        lastActionFeedback: ''
+        lastActionFeedback: '',
+        recipes: [
+            {
+                id: 'campfire',
+                name: 'Feu de Camp',
+                inputs: { 'Bois': 5, 'Pierre': 5 },
+                output: { name: 'Kit de Feu de Camp', count: 1 }
+            }
+        ]
     }),
     actions: {
         move(x: number, y: number) {
