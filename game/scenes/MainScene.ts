@@ -51,6 +51,10 @@ export default class MainScene extends Scene {
     // Timer
     private survivalTimer!: Phaser.Time.TimerEvent;
 
+    // Mode Placement
+    private ghostObject: Phaser.GameObjects.Image | null = null;
+    private ghostTween: Phaser.Tweens.Tween | null = null;
+
     constructor() {
         super('MainScene');
     }
@@ -67,6 +71,9 @@ export default class MainScene extends Scene {
 
     create() {
         this.playerStore = usePlayerStore();
+
+        // Réinitialiser le mode placement au démarrage par sécurité
+        this.playerStore.setPlacementMode(false);
 
         // Configuration de l'origine de la carte
         this.mapOriginX = GameConfig.MAP_SIZE * (IsoMath.TILE_WIDTH / 2);
@@ -145,6 +152,9 @@ export default class MainScene extends Scene {
         this.survivalTimer = this.time.addEvent({
             delay: 1000,
             callback: () => {
+                // Application de la chaleur des feux de camp
+                this.handleCampfireWarmth();
+
                 // On passe l'état "isMoving" pour ajuster la fatigue
                 this.playerStore.tickVitality(this.isMoving);
             },
@@ -163,8 +173,104 @@ export default class MainScene extends Scene {
             this.mapManager.gridData
         );
 
+        // Logic Visualisation Mode Placement (Ghost)
+        this.updatePlacementGhost();
+
         // Mise à jour de l'ambiance (parallaxe fond)
         this.ambianceManager.update();
+    }
+
+    /**
+     * Gestion de la chaleur (Bonus d'énergie)
+     */
+    private handleCampfireWarmth(): void {
+        const playerPos = this.player.getGridPosition();
+        let nearFire = false;
+
+        // On itère sur tous les objets pour trouver les feux de camp
+        // Note: Pour optimiser, on pourrait garder une liste séparée des feux
+        const objects = this.objectManager.getObjectMap();
+
+        for (const [key, obj] of objects.entries()) {
+            if (obj.getData('type') === 'campfire') {
+                const fireX = obj.getData('gridX');
+                const fireY = obj.getData('gridY');
+                const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, fireX, fireY);
+
+                if (dist < 3) { // Moins de 3 cases
+                    nearFire = true;
+                    break;
+                }
+            }
+        }
+
+        if (nearFire) {
+            // Bonus : Régénération d'énergie passive ou réduction de la perte
+            if (this.playerStore.stats.energy < this.playerStore.stats.maxEnergy) {
+                this.playerStore.updateStats({ energy: this.playerStore.stats.energy + 2 });
+
+                // Petit feedback visuel (Texte flottant occasionnel)
+                if (Math.random() < 0.2) {
+                    this.showFloatingText(this.player.getSprite().x, this.player.getSprite().y - 60, "♨️ Au chaud", "#fb923c");
+                }
+            }
+        }
+    }
+
+    /**
+     * Logic du fantôme de placement
+     */
+    private updatePlacementGhost(): void {
+        const pointer = this.input.activePointer;
+
+        if (!this.playerStore.placementMode) {
+            if (this.ghostObject) {
+                this.ghostObject.destroy();
+                this.ghostObject = null;
+                if (this.ghostTween) {
+                    this.ghostTween.stop();
+                    this.ghostTween = null;
+                }
+            }
+            return;
+        }
+
+        const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+        const target = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
+
+        // Créer le fantôme s'il n'existe pas
+        if (!this.ghostObject) {
+            // On utilise 'rock' comme base pour le campfire pour l'instant
+            this.ghostObject = this.add.image(0, 0, 'rock');
+            this.ghostObject.setAlpha(0.6);
+            this.ghostObject.setTint(0xffaa00);
+            this.ghostObject.setOrigin(0.5, 1);
+
+            // Animation de pulsation
+            this.ghostTween = this.tweens.add({
+                targets: this.ghostObject,
+                scale: 1.1,
+                alpha: 0.4,
+                duration: 800,
+                yoyo: true,
+                repeat: -1
+            });
+        }
+
+        // Positionner le fantôme
+        if (this.isValidTile(target.x, target.y)) {
+            const isoPos = IsoMath.gridToIso(target.x, target.y, this.mapOriginX, this.mapOriginY);
+            this.ghostObject.setPosition(isoPos.x, isoPos.y);
+            this.ghostObject.setDepth(999999);
+
+            // Indiquer la validité (Vert si vide, Rouge si occupé)
+            const isOccupied = this.objectManager.hasObject(target.x, target.y) ||
+                this.mapManager.gridData[target.y]?.[target.x] !== 0;
+
+            this.ghostObject.setTint(isOccupied ? 0xff0000 : 0x00ff00);
+        } else {
+            this.ghostObject.setVisible(false);
+        }
     }
 
     /**
@@ -188,6 +294,9 @@ export default class MainScene extends Scene {
     private setupInputEvents(): void {
         // Clic sur un objet
         this.input.on('gameobjectup', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.Image) => {
+            // Empêche la récolte si on est en mode placement
+            if (this.playerStore.placementMode) return;
+
             const gridX = gameObject.getData('gridX');
             const gridY = gameObject.getData('gridY');
             if (gridX !== undefined && gridY !== undefined) {
@@ -252,6 +361,24 @@ export default class MainScene extends Scene {
         const gridData = this.mapManager.gridData;
 
         if (!this.isValidTile(target.x, target.y)) return;
+
+        // --- SECTION : PLACEMENT D'OBJET ---
+        if (this.playerStore.placementMode && this.playerStore.placingItemName) {
+            // Vérification si la case est libre
+            const isOccupied = this.objectManager.hasObject(target.x, target.y) ||
+                gridData[target.y]?.[target.x] !== 0; // 0 = vide/herbe
+
+            if (!isOccupied) {
+                this.handlePlacement(target.x, target.y);
+            } else {
+                this.playerStore.lastActionFeedback = "Impossible de placer ici !#" + Date.now();
+                console.log("Placement impossible : case occupée");
+            }
+            return; // On arrête là pour ne pas bouger
+        }
+
+        // --- SECTION : MOUVEMENT STANDARD ---
+
         const playerPos = this.player.getGridPosition();
         const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, target.x, target.y);
 
@@ -276,6 +403,42 @@ export default class MainScene extends Scene {
 
         this.startMove(target.x, target.y, null);
     }
+
+    /**
+     * Gère le placement effectif de l'objet
+     */
+    private handlePlacement(x: number, y: number): void {
+        console.log("Placement de :", this.playerStore.placingItemName);
+
+        // Création de l'objet
+        if (this.playerStore.placingItemName === 'Kit de Feu de Camp') {
+            // On utilise 'rock' teinté pour l'instant
+            const campfire = this.objectManager.placeObject(x, y, 'rock', this.mapOriginX, this.mapOriginY);
+            campfire.setTint(0xffaa00);
+            campfire.setName('Feu de Camp');
+            campfire.setData('type', 'campfire');
+
+            // Animation continue
+            this.tweens.add({
+                targets: campfire,
+                scale: { from: 1, to: 1.05 },
+                alpha: { from: 1, to: 0.9 },
+                yoyo: true,
+                repeat: -1,
+                duration: 1000
+            });
+
+            // Consommation de l'item
+            this.playerStore.removeItem(this.playerStore.placingItemName, 1);
+
+            // Feedback
+            this.playerStore.lastActionFeedback = "Feu de Camp placé !#" + Date.now();
+        }
+
+        // Désactivation du mode placement (ou on le laisse pour en placer plusieurs ?) - Désactivation pour l'instant
+        this.playerStore.setPlacementMode(false);
+    }
+
 
     /**
      * Gère l'intention de récolter une ressource

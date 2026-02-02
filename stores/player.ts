@@ -26,6 +26,8 @@ export interface PlayerState {
     };
     lastActionFeedback: string;
     recipes: Recipe[];
+    placementMode: boolean;
+    placingItemName: string | null;
 }
 
 export interface Recipe {
@@ -62,9 +64,19 @@ export const usePlayerStore = defineStore('player', {
                 inputs: { 'Bois': 5, 'Pierre': 5 },
                 output: { name: 'Kit de Feu de Camp', count: 1 }
             }
-        ]
+        ],
+        placementMode: false,
+        placingItemName: null
     }),
     actions: {
+        setPlacementMode(active: boolean, itemName: string | null = null) {
+            this.placementMode = active;
+            this.placingItemName = itemName;
+            if (active && itemName) {
+                this.lastActionFeedback = `Mode placement : ${itemName}#${Date.now()}`;
+            }
+        },
+
         move(x: number, y: number) {
             this.position = { x, y };
         },
@@ -75,15 +87,15 @@ export const usePlayerStore = defineStore('player', {
             this.color = newColor;
         },
         // Cette action reste compatible avec MainScene qui envoie juste "Bois" ou "Pierre"
-        addItem(itemName: string) {
+        addItem(itemName: string, count: number = 1) {
             const existingItem = this.inventory.find(i => i.name === itemName);
 
             if (existingItem) {
-                existingItem.count++;
+                existingItem.count += count;
             } else {
-                this.inventory.push({ name: itemName, count: 1 });
+                this.inventory.push({ name: itemName, count: count });
             }
-            console.log(`[Store] Ajout de ${itemName}. Inventaire:`, this.inventory);
+            console.log(`[Store] Ajout de ${count}x ${itemName}. Inventaire:`, this.inventory);
         },
 
         // Helpers pour modifier les stats de manière sécurisée
@@ -132,6 +144,48 @@ export const usePlayerStore = defineStore('player', {
             }
         },
 
+        // Helper pour retirer un item (utilisé pour craft et consommation)
+        removeItem(itemName: string, count: number = 1) {
+            const item = this.inventory.find(i => i.name === itemName);
+            if (item) {
+                item.count -= count;
+                if (item.count <= 0) {
+                    this.inventory = this.inventory.filter(i => i.name !== itemName);
+                }
+            }
+        },
+
+        // Action de Crafting
+        craftItem(recipeId: string): boolean {
+            const recipe = this.recipes.find(r => r.id === recipeId);
+            if (!recipe) {
+                console.error(`[Store] Recette ${recipeId} introuvable`);
+                return false;
+            }
+
+            // 1. Vérification des ressources
+            for (const [ingredientName, requiredCount] of Object.entries(recipe.inputs)) {
+                const item = this.inventory.find(i => i.name === ingredientName);
+                if (!item || item.count < requiredCount) {
+                    console.log(`[Store] Pas assez de ${ingredientName} pour craft ${recipe.name}`);
+                    return false;
+                }
+            }
+
+            // 2. Consommation des ressources
+            for (const [ingredientName, requiredCount] of Object.entries(recipe.inputs)) {
+                this.removeItem(ingredientName, requiredCount);
+            }
+
+            // 3. Ajout de l'item produit
+            this.addItem(recipe.output.name, recipe.output.count);
+
+            // Feedback
+            this.lastActionFeedback = `Fabriqué : ${recipe.output.name} !#${Date.now()}`;
+            console.log(`[Store] Craft réussi : ${recipe.output.name}`);
+            return true;
+        },
+
         // Consomme de l'énergie (action immédiate)
         consumeEnergy(amount: number) {
             this.updateStats({ energy: this.stats.energy - amount });
@@ -143,6 +197,12 @@ export const usePlayerStore = defineStore('player', {
 
             if (!item || item.count === 0) {
                 console.warn(`[Store] Impossible de consommer ${itemName} - Item introuvable ou quantité nulle`);
+                return;
+            }
+
+            // Cas Spécial : Items à placer (Construction)
+            if (itemName === 'Kit de Feu de Camp') {
+                this.setPlacementMode(true, itemName);
                 return;
             }
 
@@ -159,6 +219,8 @@ export const usePlayerStore = defineStore('player', {
 
                 if (!isUseful) {
                     console.log(`[Store] ${itemName} non consommé - Stats déjà au max`);
+                    // Feedback UI
+                    this.lastActionFeedback = `Pas nécessaire...#${Date.now()}`;
                     return;
                 }
 
@@ -182,10 +244,7 @@ export const usePlayerStore = defineStore('player', {
                 this.lastActionFeedback = `${feedbackParts.join(' | ')}#${Date.now()}`;
 
                 // Retire l'item de l'inventaire
-                item.count--;
-                if (item.count === 0) {
-                    this.inventory = this.inventory.filter(i => i.name !== itemName);
-                }
+                this.removeItem(itemName, 1);
 
                 console.log(`[Store] ${itemName} consommé !`);
             } else {
