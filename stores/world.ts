@@ -2,13 +2,35 @@ import { defineStore } from 'pinia';
 
 export interface WorldState {
     worldSeed: string;
+    time: number;
 }
 
 export const useWorldStore = defineStore('world', {
     state: (): WorldState => ({
-        worldSeed: ''
+        worldSeed: '',
+        time: 480 // Commence à 08:00
     }),
+    getters: {
+        hours: (state) => Math.floor(state.time / 60),
+        minutes: (state) => Math.floor(state.time % 60),
+        formattedTime(): string {
+            const h = this.hours.toString().padStart(2, '0');
+            const m = this.minutes.toString().padStart(2, '0');
+            return `${h}:${m}`;
+        },
+        isNight: (state) => {
+            const h = Math.floor(state.time / 60);
+            return h < 6 || h >= 20;
+        }
+    },
     actions: {
+        tickTime(amount: number) {
+            this.time += amount;
+            if (this.time >= 1440) {
+                this.time = this.time % 1440;
+            }
+        },
+
         /**
          * Initialise la seed du monde.
          * Récupère depuis le localStorage si existant, sinon génère une nouvelle seed.

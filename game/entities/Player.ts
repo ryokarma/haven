@@ -9,6 +9,7 @@ import { GameConfig } from '../config/GameConfig';
 export class Player {
     private scene: Phaser.Scene;
     private sprite: Phaser.GameObjects.Image;
+    private light: Phaser.GameObjects.Image; // La petite lumière du joueur
     private gridX: number;
     private gridY: number;
 
@@ -21,6 +22,14 @@ export class Player {
         this.sprite = scene.add.image(pos.x, pos.y, 'hero');
         this.sprite.setOrigin(0.5, 1);
         this.sprite.setDepth(pos.y);
+
+        // Lumière du joueur
+        this.light = scene.add.image(pos.x, pos.y - 32, 'light_glow'); // -32 pour centrer sur le corps
+        this.light.setOrigin(0.5, 0.5);
+        this.light.setBlendMode(Phaser.BlendModes.ADD);
+        this.light.setDepth(pos.y + 1);
+        this.light.setScale(0.8); // Plus petit que le feu
+        this.light.setAlpha(0);
     }
 
     /**
@@ -55,6 +64,19 @@ export class Player {
     /**
      * Anime le déplacement vers une position
      */
+    /**
+     * Met à jour l'intensité de la lumière
+     */
+    updateLight(targetAlpha: number): void {
+        // On ne veut pas que ça clignote trop, un lerp serait bien mais simple assignment ok pour MVP
+        // On garde un minimum de visibilité si demandé
+        this.light.setVisible(targetAlpha > 0.05);
+        this.light.setAlpha(targetAlpha * 0.6); // 60% de l'intensité max
+    }
+
+    /**
+     * Anime le déplacement vers une position
+     */
     animateMoveTo(
         targetX: number,
         targetY: number,
@@ -75,6 +97,12 @@ export class Player {
             ease: 'Linear',
             onUpdate: () => {
                 this.sprite.setDepth(this.sprite.y);
+
+                // Sync lumière
+                if (this.light) {
+                    this.light.setPosition(this.sprite.x, this.sprite.y - 32);
+                    this.light.setDepth(this.sprite.y + 1);
+                }
             },
             onComplete: onComplete
         });
@@ -84,6 +112,7 @@ export class Player {
      * Détruit le joueur
      */
     destroy(): void {
+        if (this.light) this.light.destroy();
         this.sprite.destroy();
     }
 }

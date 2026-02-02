@@ -20,6 +20,36 @@ export class TextureGenerator {
         this.generateHeroTexture();
         this.generateTileTextures();
         this.generateFireflyTexture();
+        this.generateGlowTexture();
+    }
+
+    /**
+     * Génère la texture de halo lumineux
+     */
+    private generateGlowTexture(): void {
+        if (this.scene.textures.exists('light_glow')) return;
+
+        // Création d'un canvas pour le gradient radial
+        const size = 256;
+        const texture = this.scene.textures.createCanvas('light_glow', size, size);
+
+        if (texture) {
+            const ctx = texture.getContext();
+            const cx = size / 2;
+            const cy = size / 2;
+            const radius = size / 2;
+
+            // Gradient radial: Centre chaud/lumineux -> Bord transparent
+            const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+            grd.addColorStop(0, 'rgba(255, 250, 200, 0.8)'); // Centre blanc-chaud opaque
+            grd.addColorStop(0.4, 'rgba(255, 150, 50, 0.2)'); // Milieu orange doux translucide
+            grd.addColorStop(1, 'rgba(0, 0, 0, 0)'); // Bord transparent
+
+            ctx.fillStyle = grd;
+            ctx.fillRect(0, 0, size, size);
+
+            texture.refresh();
+        }
     }
 
     /**

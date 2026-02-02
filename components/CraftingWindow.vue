@@ -30,7 +30,6 @@ const craft = (recipe: Recipe) => {
   const success = player.craftItem(recipe.id);
   
   if (success) {
-      console.log(`Fabrication de ${recipe.output.name} réussie !`);
       // Optionnel : fermer la fenêtre après craft ou jouer un son
       // emit('close'); 
   }

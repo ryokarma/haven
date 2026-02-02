@@ -46,14 +46,39 @@ export class ObjectManager {
         obj.setData('gridX', x);
         obj.setData('gridY', y);
         obj.setData('type', type); // Sauvegarde du type de base
+        obj.setData('originalTint', 0xffffff); // Default tint
+
+        // LOGIC LUMIÈRE (Campfire)
+        if (type === 'camp' || type === 'campfire' || config.assetKey === 'campfire') { // Adapt key check
+            const glow = this.scene.add.image(pos.x, pos.y, 'light_glow');
+            glow.setOrigin(0.5, 0.5);
+            glow.setBlendMode(Phaser.BlendModes.ADD);
+            glow.setDepth(pos.y + 1); // Slightly in front
+            glow.setAlpha(0); // Invisible le jour par défaut, sera update
+
+            // Effet pulse
+            this.scene.tweens.add({
+                targets: glow,
+                scale: { from: 1.0, to: 1.15 },
+                alpha: { from: 0.6, to: 0.8 }, // Variation d'intensité
+                duration: 1500 + Math.random() * 500,
+                yoyo: true,
+                repeat: -1,
+                ease: 'Sine.easeInOut'
+            });
+
+            obj.setData('light', glow);
+        }
 
         // Logique spécifique pour les arbres (Pommiers)
         if (type === 'tree') {
             // Utilise Math.random() ou le RNG de la scène si disponible (ici simple random pour l'effet visuel)
             // Note: Idéalement il faudrait utiliser le RNG seedé du MapManager, mais ObjectManager est agnostique.
             if (Math.random() < 0.2) {
-                obj.setTint(0xFFaaaa); // Teinte rougeâtre
+                const appleTint = 0xFFaaaa;
+                obj.setTint(appleTint); // Teinte rougeâtre
                 obj.setData('subType', 'apple_tree');
+                obj.setData('originalTint', appleTint);
             }
         }
 
@@ -76,6 +101,11 @@ export class ObjectManager {
         const key = `${x},${y}`;
         const obj = this.objectMap.get(key);
         if (obj) {
+            // Destruction de la lumière attachée si présente
+            const light = obj.getData('light') as Phaser.GameObjects.Image;
+            if (light) {
+                light.destroy();
+            }
             obj.destroy();
             this.objectMap.delete(key);
         }

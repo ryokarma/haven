@@ -88,6 +88,7 @@ export const usePlayerStore = defineStore('player', {
         },
         // Cette action reste compatible avec MainScene qui envoie juste "Bois" ou "Pierre"
         addItem(itemName: string, count: number = 1) {
+            if (count <= 0) return;
             const existingItem = this.inventory.find(i => i.name === itemName);
 
             if (existingItem) {
@@ -95,7 +96,6 @@ export const usePlayerStore = defineStore('player', {
             } else {
                 this.inventory.push({ name: itemName, count: count });
             }
-            console.log(`[Store] Ajout de ${count}x ${itemName}. Inventaire:`, this.inventory);
         },
 
         // Helpers pour modifier les stats de manière sécurisée
@@ -167,7 +167,6 @@ export const usePlayerStore = defineStore('player', {
             for (const [ingredientName, requiredCount] of Object.entries(recipe.inputs)) {
                 const item = this.inventory.find(i => i.name === ingredientName);
                 if (!item || item.count < requiredCount) {
-                    console.log(`[Store] Pas assez de ${ingredientName} pour craft ${recipe.name}`);
                     return false;
                 }
             }
@@ -182,7 +181,6 @@ export const usePlayerStore = defineStore('player', {
 
             // Feedback
             this.lastActionFeedback = `Fabriqué : ${recipe.output.name} !#${Date.now()}`;
-            console.log(`[Store] Craft réussi : ${recipe.output.name}`);
             return true;
         },
 
@@ -218,7 +216,6 @@ export const usePlayerStore = defineStore('player', {
                 if (effect.health && this.stats.health < this.stats.maxHealth) isUseful = true;
 
                 if (!isUseful) {
-                    console.log(`[Store] ${itemName} non consommé - Stats déjà au max`);
                     // Feedback UI
                     this.lastActionFeedback = `Pas nécessaire...#${Date.now()}`;
                     return;
@@ -245,8 +242,6 @@ export const usePlayerStore = defineStore('player', {
 
                 // Retire l'item de l'inventaire
                 this.removeItem(itemName, 1);
-
-                console.log(`[Store] ${itemName} consommé !`);
             } else {
                 console.warn(`[Store] ${itemName} n'a pas d'effet défini`);
             }

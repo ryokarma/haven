@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { usePlayerStore } from '@/stores/player';
+import { useWorldStore } from '@/stores/world';
 import CraftingWindow from './CraftingWindow.vue';
 
 const player = usePlayerStore();
+const world = useWorldStore();
 const isInventoryOpen = ref(false);
 const isCraftingOpen = ref(false);
 
@@ -86,7 +88,15 @@ const handleItemClick = (itemName: string) => {
                   </div>
                 </div>
              </div>
-             
+
+             <!-- Time Widget -->
+             <div class="flex items-center gap-2 bg-slate-900/60 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full shadow-lg w-fit">
+               <span class="text-xl animate-pulse">{{ world.isNight ? '🌙' : '☀️' }}</span>
+               <span class="font-mono text-lg font-bold text-white tracking-widest drop-shadow-md">
+                 {{ world.formattedTime }}
+               </span>
+             </div>
+
              <div class="flex items-center gap-2 text-xs font-mono text-slate-300 bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm border border-white/5 w-fit">
                 <span>X: {{ player.position.x }}</span>
                 <span class="text-white/20">|</span>

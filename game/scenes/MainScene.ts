@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { usePlayerStore } from '@/stores/player';
+import { useWorldStore } from '@/stores/world';
 import { IsoMath } from '@/game/utils/IsoMath';
 import { GameConfig } from '@/game/config/GameConfig';
 import { TextureGenerator } from '@/game/graphics/TextureGenerator';
@@ -48,8 +49,10 @@ export default class MainScene extends Scene {
 
     // Store (Typed)
     private playerStore!: ReturnType<typeof usePlayerStore>;
+    private worldStore!: ReturnType<typeof useWorldStore>;
     // Timer
     private survivalTimer!: Phaser.Time.TimerEvent;
+    private worldTimer!: Phaser.Time.TimerEvent;
 
     // Mode Placement
     private ghostObject: Phaser.GameObjects.Image | null = null;
@@ -71,6 +74,7 @@ export default class MainScene extends Scene {
 
     create() {
         this.playerStore = usePlayerStore();
+        this.worldStore = useWorldStore();
 
         // Réinitialiser le mode placement au démarrage par sécurité
         this.playerStore.setPlacementMode(false);
@@ -161,6 +165,15 @@ export default class MainScene extends Scene {
             loop: true
         });
 
+        // Timer pour l'heure du monde (10 minutes toutes les 1s)
+        this.worldTimer = this.time.addEvent({
+            delay: 1000,
+            callback: () => {
+                this.worldStore.tickTime(10);
+            },
+            loop: true
+        });
+
         // Cleanup on shutdown
         this.events.once('shutdown', this.shutdown, this);
     }
@@ -178,6 +191,58 @@ export default class MainScene extends Scene {
 
         // Mise à jour de l'ambiance (parallaxe fond)
         this.ambianceManager.update();
+
+        // Application du cycle Jour/Nuit (Couleur globale)
+        const ambientColor = this.ambianceManager.getAmbientColor(this.worldStore.time);
+
+        // Teinter les tuiles
+        this.tileManager.getTileGroup().getChildren().forEach(go => {
+            const img = go as Phaser.GameObjects.Image;
+
+            // Lazy init de la teinte originale
+            if (!img.getData('hasOriginalTint')) {
+                img.setData('originalTint', img.tintTopLeft);
+                img.setData('hasOriginalTint', true);
+            }
+
+            const originalTint = img.getData('originalTint') as number;
+            const finalTint = this.ambianceManager.multiplyColors(ambientColor, originalTint);
+            img.setTint(finalTint);
+        });
+
+        // Teinter les objets
+        this.objectManager.getObjectMap().forEach(obj => {
+            // Lazy init (sécurité si pas set par ObjectManager à temps)
+            if (obj.getData('originalTint') === undefined) {
+                obj.setData('originalTint', 0xffffff);
+            }
+
+            const originalTint = obj.getData('originalTint') as number;
+            const finalTint = this.ambianceManager.multiplyColors(ambientColor, originalTint);
+            obj.setTint(finalTint);
+        });
+
+        // Teinter le joueur
+        this.player.setTint(ambientColor);
+
+        // GESTION DES LUMIÈRES (Contrast)
+        // La nuit (20h-6h), les lumières sont allumées. Le jour, éteintes (0).
+        // Transition plus franche pour éviter le "voile blanc".
+
+        const isNight = this.worldStore.isNight;
+        const lightAlpha = isNight ? 0.6 : 0;
+
+        // Mise à jour lumière du joueur
+        this.player.updateLight(lightAlpha);
+
+        // Mise à jour lumières des objets (Feux de camp)
+        this.objectManager.getObjectMap().forEach(obj => {
+            const light = obj.getData('light') as Phaser.GameObjects.Image;
+            if (light) {
+                // On force la visibilité uniquement la nuit
+                light.setVisible(lightAlpha > 0);
+            }
+        });
     }
 
     /**
@@ -278,6 +343,7 @@ export default class MainScene extends Scene {
      */
     private shutdown() {
         if (this.survivalTimer) this.survivalTimer.destroy();
+        if (this.worldTimer) this.worldTimer.destroy();
         this.input.off('gameobjectup');
         this.input.off('pointerdown');
         this.input.off('pointermove');
@@ -325,7 +391,7 @@ export default class MainScene extends Scene {
         });
 
         // Zoom avec la molette
-        this.input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: unknown[], deltaX: number, deltaY: number) => {
+        this.input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[], deltaX: number, deltaY: number) => {
             if (deltaY > 0) {
                 this.cameras.main.zoom = Math.max(
                     GameConfig.CAMERA.minZoom,
@@ -372,7 +438,6 @@ export default class MainScene extends Scene {
                 this.handlePlacement(target.x, target.y);
             } else {
                 this.playerStore.lastActionFeedback = "Impossible de placer ici !#" + Date.now();
-                console.log("Placement impossible : case occupée");
             }
             return; // On arrête là pour ne pas bouger
         }
@@ -390,7 +455,7 @@ export default class MainScene extends Scene {
                 const isoPos = IsoMath.gridToIso(target.x, target.y, this.mapOriginX, this.mapOriginY);
                 this.showFloatingText(isoPos.x, isoPos.y - 50, "+1 Flasque d'eau", "#06b6d4"); // Cyan
             } else {
-                console.log("Trop loin de l'eau !");
+                // Feedback: Trop loin
             }
             return;
         }
@@ -408,8 +473,6 @@ export default class MainScene extends Scene {
      * Gère le placement effectif de l'objet
      */
     private handlePlacement(x: number, y: number): void {
-        console.log("Placement de :", this.playerStore.placingItemName);
-
         // Création de l'objet
         if (this.playerStore.placingItemName === 'Kit de Feu de Camp') {
             // On utilise 'rock' teinté pour l'instant
@@ -554,7 +617,6 @@ export default class MainScene extends Scene {
                 const pathCost = path.length - 1;
 
                 if (this.playerStore.stats.energy < pathCost) {
-                    console.log(`[MainScene] Pas assez d'énergie ! Besoin: ${pathCost}, Dispo: ${Math.floor(this.playerStore.stats.energy)}`);
                     // TODO: Feedback UI "Pas assez d'énergie"
 
                     // On peut imaginer d'annuler tout le mouvement, ou de bouger jusqu'à épuisement.
