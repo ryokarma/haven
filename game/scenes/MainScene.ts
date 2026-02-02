@@ -9,6 +9,7 @@ import { TileManager } from '@/game/managers/TileManager';
 import { ObjectManager } from '@/game/managers/ObjectManager';
 import { AmbianceManager } from '@/game/managers/AmbianceManager';
 import { MapManager } from '@/game/managers/MapManager';
+import { SaveManager, type GameState } from '@/game/managers/SaveManager';
 import { TileSelector } from '@/game/ui/TileSelector';
 import { Player } from '@/game/entities/Player';
 
@@ -23,6 +24,7 @@ export default class MainScene extends Scene {
     private objectManager!: ObjectManager;
     private ambianceManager!: AmbianceManager;
     private mapManager!: MapManager;
+    private saveManager!: SaveManager;
     private tileSelector!: TileSelector;
     private textureGenerator!: TextureGenerator;
 
@@ -87,6 +89,7 @@ export default class MainScene extends Scene {
         this.tileManager = new TileManager(this);
         this.objectManager = new ObjectManager(this);
         this.ambianceManager = new AmbianceManager(this);
+        this.saveManager = new SaveManager(this, this.objectManager);
 
         // Map Manager (Handles Data & Generation)
         this.mapManager = new MapManager(
@@ -97,8 +100,58 @@ export default class MainScene extends Scene {
             this.mapOriginY
         );
 
-        // Génération de la carte
+        // --- CHARGEMENT DE LA SAUVEGARDE ---
+        const savedGame = this.saveManager.loadGame();
+        let scaleFactor = 1; // Default zoom
+
+        if (savedGame) {
+            // Restauration des Stores
+            console.log("Applying Save Data...");
+            this.worldStore.time = savedGame.world.time;
+            this.worldStore.worldSeed = savedGame.world.seed; // IMPORTANT: Set seed BEFORE gen
+
+            // Player Stats & Inv
+            this.playerStore.stats = savedGame.player.stats;
+            this.playerStore.inventory = savedGame.player.inventory;
+            this.playerStore.xp = savedGame.player.xp;
+            this.playerStore.level = savedGame.player.level;
+            this.playerStore.color = savedGame.player.color;
+            this.playerStore.position = savedGame.player.position; // Store position textuelle
+        } else {
+            console.log("No Save Game. Starting New Game.");
+            this.worldStore.initSeed();
+        }
+
+        // Génération de la carte (Basé sur la seed)
         this.mapManager.generate();
+
+        // --- APPLICATION DES MODIFICATIONS DE MAP (Load) ---
+        if (savedGame) {
+            // 1. Supprimer les objets récoltés
+            savedGame.map.removedObjectIds.forEach(id => {
+                // ID format "x,y"
+                const parts = id.split(',');
+                const x = parseInt(parts[0]);
+                const y = parseInt(parts[1]);
+                this.objectManager.removeObject(x, y);
+                this.mapManager.updateCell(x, y, 0); // Libère la tuile (important pour pathfinding)
+            });
+
+            // 2. Replacer les objets construits
+            savedGame.map.placedObjects.forEach(objData => {
+                this.objectManager.placeObject(
+                    objData.x,
+                    objData.y,
+                    objData.type,
+                    this.mapOriginX,
+                    this.mapOriginY,
+                    true // isPlayerPlaced = true
+                );
+                // Note: On ne set pas forcément la grid à 1 (bloquant) pour les feux de camp
+                // selon règles du jeu. Si bloquant, ajouter updateCell(x,y,1).
+            });
+        }
+
         const gridData = this.mapManager.gridData;
 
         // Initialisation du pathfinding avec déplacements diagonaux
@@ -124,6 +177,9 @@ export default class MainScene extends Scene {
             this.mapOriginY
         );
         this.player.setTint(this.playerStore.color);
+
+        // Gestion de l'autosave
+        this.saveManager.startAutoSave(30);
 
         // Configuration de la caméra - Game Feel
         // 1. Centrage immédiat (Teleport) pour éviter le traveling au chargement
@@ -572,6 +628,25 @@ export default class MainScene extends Scene {
         const object = this.objectManager.getObject(x, y);
 
         if (object) {
+            // Calcul du coût de récolte basé sur l'équipement
+            const harvestCost = this.playerStore.statsModifiers.harvestCost;
+
+            if (this.playerStore.stats.energy < harvestCost) {
+                this.showFloatingText(object.x, object.y - 50, "Trop fatigué !", "#ef4444");
+                return;
+            }
+
+            this.playerStore.consumeEnergy(harvestCost);
+
+            // Feedback visuel sur l'effort
+            const isEfficient = harvestCost < 3;
+            // Green if efficient, white if normal
+            const color = isEfficient ? "#4ade80" : "#ffffff";
+            const text = isEfficient ? `- ${harvestCost} Énergie (Hache)` : `- ${harvestCost} Énergie`;
+
+            this.showFloatingText(object.x, object.y - 80, text, color);
+
+
             this.tweens.add({
                 targets: object,
                 x: object.x + 5,

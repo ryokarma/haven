@@ -28,6 +28,12 @@ export interface PlayerState {
     recipes: Recipe[];
     placementMode: boolean;
     placingItemName: string | null;
+    equipment: {
+        head: InventoryItem | null;
+        body: InventoryItem | null;
+        mainHand: InventoryItem | null;
+        accessory: InventoryItem | null;
+    };
 }
 
 export interface Recipe {
@@ -37,6 +43,13 @@ export interface Recipe {
     output: { name: string; count: number };
 }
 
+const ITEM_DB: Record<string, { slotType: 'head' | 'body' | 'mainHand' | 'accessory' | null }> = {
+    'Hache en pierre': { slotType: 'mainHand' },
+    'Chapeau de paille': { slotType: 'head' },
+    'Tunique': { slotType: 'body' },
+    'Anneau': { slotType: 'accessory' }
+};
+
 export const usePlayerStore = defineStore('player', {
     state: (): PlayerState => ({
         username: 'Voyageur',
@@ -44,7 +57,9 @@ export const usePlayerStore = defineStore('player', {
         position: { x: 0, y: 0 },
         level: 1,
         xp: 0,
-        inventory: [],
+        inventory: [
+            { name: 'Hache en pierre', count: 1 } // Item de test
+        ],
         // Système de survie complet
         stats: {
             health: 100,
@@ -63,18 +78,78 @@ export const usePlayerStore = defineStore('player', {
                 name: 'Feu de Camp',
                 inputs: { 'Bois': 5, 'Pierre': 5 },
                 output: { name: 'Kit de Feu de Camp', count: 1 }
+            },
+            {
+                id: 'stone_axe',
+                name: 'Hache en pierre',
+                inputs: { 'Bois': 10, 'Pierre': 5 },
+                output: { name: 'Hache en pierre', count: 1 }
             }
         ],
         placementMode: false,
-        placingItemName: null
+        placingItemName: null,
+        equipment: {
+            head: null,
+            body: null,
+            mainHand: null,
+            accessory: null
+        }
     }),
+    getters: {
+        statsModifiers(state) {
+            return {
+                harvestCost: state.equipment.mainHand?.name === 'Hache en pierre' ? 1 : 3
+            };
+        }
+    },
     actions: {
+        getItemInfo(itemName: string) {
+            return ITEM_DB[itemName] || { slotType: null };
+        },
+
         setPlacementMode(active: boolean, itemName: string | null = null) {
             this.placementMode = active;
             this.placingItemName = itemName;
             if (active && itemName) {
                 this.lastActionFeedback = `Mode placement : ${itemName}#${Date.now()}`;
             }
+        },
+
+        // ... (existing actions)
+
+        equipItem(itemName: string) {
+            const info = this.getItemInfo(itemName);
+            if (!info.slotType) {
+                this.lastActionFeedback = `Impossible d'équiper ${itemName}#${Date.now()}`;
+                return;
+            }
+
+            const slot = info.slotType;
+            const currentEquip = this.equipment[slot];
+
+            // Retirer 1 item de l'inventaire
+            this.removeItem(itemName, 1);
+
+            // Si un item était déjà équipé, on le remet dans l'inventaire
+            if (currentEquip) {
+                this.addItem(currentEquip.name, 1);
+            }
+
+            // Équiper le nouvel item
+            this.equipment[slot] = { name: itemName, count: 1 };
+            this.lastActionFeedback = `Équipé : ${itemName}#${Date.now()}`;
+        },
+
+        unequipItem(slot: 'head' | 'body' | 'mainHand' | 'accessory') {
+            const currentEquip = this.equipment[slot];
+            if (!currentEquip) return;
+
+            // Ajouter à l'inventaire
+            this.addItem(currentEquip.name, 1);
+
+            // Vider le slot
+            this.equipment[slot] = null;
+            this.lastActionFeedback = `Déséquipé : ${currentEquip.name}#${Date.now()}`;
         },
 
         move(x: number, y: number) {
@@ -204,6 +279,13 @@ export const usePlayerStore = defineStore('player', {
                 return;
             }
 
+            // Attempt equip
+            const info = this.getItemInfo(itemName);
+            if (info.slotType) {
+                this.equipItem(itemName);
+                return;
+            }
+
             const effect = GameConfig.ITEM_EFFECTS[itemName];
 
             if (effect) {
@@ -243,7 +325,8 @@ export const usePlayerStore = defineStore('player', {
                 // Retire l'item de l'inventaire
                 this.removeItem(itemName, 1);
             } else {
-                console.warn(`[Store] ${itemName} n'a pas d'effet défini`);
+                console.warn(`[Store] ${itemName} n'a pas d'effet défini et n'est pas équipable`);
+                this.lastActionFeedback = "Rien ne se passe...#" + Date.now();
             }
         }
     }

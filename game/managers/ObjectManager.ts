@@ -10,6 +10,10 @@ export class ObjectManager {
     private scene: Phaser.Scene;
     private objectMap: Map<string, Phaser.GameObjects.Image>;
 
+    // Listes pour la persistance
+    public removedObjectIds: string[] = [];
+    public placedObjects: { type: string; x: number; y: number; id: string }[] = [];
+
     constructor(scene: Phaser.Scene) {
         this.scene = scene;
         this.objectMap = new Map();
@@ -23,7 +27,8 @@ export class ObjectManager {
         y: number,
         type: string,
         mapOriginX: number,
-        mapOriginY: number
+        mapOriginY: number,
+        isPlayerPlaced: boolean = false
     ): Phaser.GameObjects.Image {
         const pos = IsoMath.gridToIso(x, y, mapOriginX, mapOriginY);
 
@@ -47,6 +52,10 @@ export class ObjectManager {
         obj.setData('gridY', y);
         obj.setData('type', type); // Sauvegarde du type de base
         obj.setData('originalTint', 0xffffff); // Default tint
+        if (isPlayerPlaced) {
+            obj.setData('isPlayerPlaced', true);
+            this.placedObjects.push({ type, x, y, id: `${x},${y}` });
+        }
 
         // LOGIC LUMIÈRE (Campfire)
         if (type === 'camp' || type === 'campfire' || config.assetKey === 'campfire') { // Adapt key check
@@ -101,6 +110,17 @@ export class ObjectManager {
         const key = `${x},${y}`;
         const obj = this.objectMap.get(key);
         if (obj) {
+            // Persistance Update
+            if (obj.getData('isPlayerPlaced')) {
+                // Si c'est un objet du joueur, on le retire de la liste des placés (il disparait de la save)
+                this.placedObjects = this.placedObjects.filter(po => po.id !== key);
+            } else {
+                // Si c'est un objet du monde, on l'ajoute à la liste des supprimés
+                if (!this.removedObjectIds.includes(key)) {
+                    this.removedObjectIds.push(key);
+                }
+            }
+
             // Destruction de la lumière attachée si présente
             const light = obj.getData('light') as Phaser.GameObjects.Image;
             if (light) {

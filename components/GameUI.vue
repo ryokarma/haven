@@ -3,11 +3,13 @@ import { ref, computed } from 'vue';
 import { usePlayerStore } from '@/stores/player';
 import { useWorldStore } from '@/stores/world';
 import CraftingWindow from './CraftingWindow.vue';
+import CharacterWindow from './CharacterWindow.vue';
 
 const player = usePlayerStore();
 const world = useWorldStore();
 const isInventoryOpen = ref(false);
 const isCraftingOpen = ref(false);
+const isCharacterOpen = ref(false);
 
 // --- CHAT ---
 interface Message { author: string; text: string; }
@@ -126,7 +128,8 @@ const handleItemClick = (itemName: string) => {
         <div v-else class="grid grid-cols-4 gap-3">
             <div v-for="(item, idx) in player.inventory" :key="idx" 
                  @click="handleItemClick(item.name)"
-                 title="Cliquer pour consommer"
+                 @contextmenu.prevent="player.equipItem(item.name)"
+                 title="Clic: Utiliser/Équiper | Clic Droit: Équiper"
                  class="group relative aspect-square flex flex-col items-center justify-center rounded-xl border border-white/5 bg-white/5 transition-all hover:bg-white/10 hover:border-amber-400/30 hover:scale-105 cursor-pointer active:scale-95">
                
                <span v-html="getIcon(item.name)" class="text-amber-200 mb-1 drop-shadow-lg"></span>
@@ -148,6 +151,11 @@ const handleItemClick = (itemName: string) => {
     <CraftingWindow 
         v-if="isCraftingOpen" 
         @close="isCraftingOpen = false" 
+    />
+
+    <CharacterWindow 
+        v-if="isCharacterOpen" 
+        @close="isCharacterOpen = false" 
     />
 
     <div class="flex w-full items-end justify-between gap-4">
@@ -177,6 +185,18 @@ const handleItemClick = (itemName: string) => {
             title="Artisanat"
           >
              <span v-html="icons.hammer"></span>
+          </button>
+
+          <!-- Bouton Personnage (Nouveau) -->
+          <button 
+            @click="isCharacterOpen = !isCharacterOpen" 
+            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
+            title="Personnage"
+          >
+             <div class="relative">
+                 <!-- Icone simple pour le personnage -->
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+             </div>
           </button>
 
           <!-- Bouton Inventaire -->
