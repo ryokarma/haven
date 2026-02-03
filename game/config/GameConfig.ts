@@ -21,6 +21,16 @@ export class GameConfig {
     static readonly MAP_GENERATION = {
         obstacleChance: 0.15,
         treeVsRockRatio: 0.5,
+        resources: {
+            cotton: {
+                chance: 0.05,
+                color: 0xFFFFFF
+            },
+            clay: {
+                chance: 0.08,
+                color: 0x8B4513
+            }
+        },
         // Configuration du bruit de Perlin pour l'eau
         noise: {
             scale: 0.04,        // Un zoom de 0.04 donne des structures d'environ 25 blocs
@@ -112,6 +122,72 @@ export const ASSET_MANIFEST: Record<string, AssetDefinition> = {
         pixelHeight: 64,
         originX: 0.5,
         originY: 0.72     // Ajustement final
+    },
+    'cotton_bush': {
+        assetKey: 'tex_cotton_bush',
+        pixelHeight: 64,
+        originX: 0.5,
+        originY: 0.8
+    },
+    'clay_mound': {
+        assetKey: 'tex_clay_mound',
+        pixelHeight: 64,
+        originX: 0.5,
+        originY: 0.72
+    },
+    'watering_can': {
+        assetKey: 'tex_watering_can',
+        pixelHeight: 32,
+        originX: 0.5,
+        originY: 0.8
+    },
+    'clay_pot': {
+        assetKey: 'tex_pot',
+        pixelHeight: 32,
+        originX: 0.5,
+        originY: 0.8
+    },
+    'furnace': {
+        assetKey: 'tex_furnace',
+        pixelHeight: 64,
+        originX: 0.5,
+        originY: 0.8  // Centrage vertical simple
+    },
+    'tex_seeds_cotton': {
+        assetKey: 'tex_seeds_cotton',
+        pixelHeight: 32,
+        originX: 0.5,
+        originY: 0.5
+    },
+    'clay_pot_seeded': {
+        assetKey: 'tex_pot_seeded',
+        pixelHeight: 32,
+        originX: 0.5,
+        originY: 0.8
+    },
+    'tex_pot_watered': {
+        assetKey: 'tex_pot_watered',
+        pixelHeight: 32,
+        originX: 0.5,
+        originY: 0.8
+    },
+    'clay_pot_watered': {
+        assetKey: 'tex_pot_watered',
+        pixelHeight: 32,
+        originX: 0.5,
+        originY: 0.8
+    },
+    'tex_pot_ready': {
+        assetKey: 'tex_pot_ready',
+        pixelHeight: 48, // Taller for plant
+        originX: 0.5,
+        originY: 0.9
+    },
+    'clay_pot_ready': {
+        assetKey: 'tex_pot_ready',
+        pixelHeight: 48,
+        originX: 0.5,
+        originY: 0.9
     },
     'fountain_placeholder': {
         assetKey: 'rock', // Utilise rock en attendant

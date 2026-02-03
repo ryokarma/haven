@@ -127,9 +127,20 @@ export class MapManager {
 
                 // Chance d'obstacle
                 if (cellType === 0 && !isInHouse && (x > 5 || y > 5)) {
-                    // Utilisation du RNG seedé
-                    if (this.rnd.frac() < GameConfig.MAP_GENERATION.obstacleChance) {
-                        cellType = 1;
+                    const rnd = this.rnd.frac();
+                    const resources = GameConfig.MAP_GENERATION.resources;
+
+                    if (rnd < resources.cotton.chance) {
+                        this.objectManager.placeObject(x, y, 'cotton_bush', this.mapOriginX, this.mapOriginY);
+                        row[x] = 1;
+                    }
+                    else if (rnd < resources.cotton.chance + resources.clay.chance) {
+                        this.objectManager.placeObject(x, y, 'clay_mound', this.mapOriginX, this.mapOriginY);
+                        row[x] = 1;
+                    }
+                    else if (rnd < resources.cotton.chance + resources.clay.chance + GameConfig.MAP_GENERATION.obstacleChance) {
+                        const type = this.rnd.frac() > GameConfig.MAP_GENERATION.treeVsRockRatio ? 'tree' : 'rock';
+                        this.objectManager.placeObject(x, y, type, this.mapOriginX, this.mapOriginY);
                         row[x] = 1;
                     }
                 }

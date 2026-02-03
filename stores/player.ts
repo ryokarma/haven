@@ -1,10 +1,19 @@
 import { defineStore } from 'pinia';
 import { GameConfig } from '@/game/config/GameConfig';
+import { getItemData, type ItemData } from '@/game/config/ItemRegistry';
 
 // Interface pour un objet groupé
 export interface InventoryItem {
     name: string;
     count: number;
+}
+
+export interface Recipe {
+    id: string;
+    name: string;
+    inputs: Record<string, number>;
+    output: { name: string; count: number };
+    station?: string; // e.g. 'furnace'
 }
 
 export interface PlayerState {
@@ -14,6 +23,8 @@ export interface PlayerState {
     level: number;
     xp: number;
     inventory: InventoryItem[];
+    // Ajout état pour les stations proches
+    nearbyStations: string[];
     stats: {
         health: number;
         maxHealth: number;
@@ -36,20 +47,6 @@ export interface PlayerState {
     };
 }
 
-export interface Recipe {
-    id: string;
-    name: string;
-    inputs: Record<string, number>;
-    output: { name: string; count: number };
-}
-
-const ITEM_DB: Record<string, { slotType: 'head' | 'body' | 'mainHand' | 'accessory' | null }> = {
-    'Hache en pierre': { slotType: 'mainHand' },
-    'Chapeau de paille': { slotType: 'head' },
-    'Tunique': { slotType: 'body' },
-    'Anneau': { slotType: 'accessory' }
-};
-
 export const usePlayerStore = defineStore('player', {
     state: (): PlayerState => ({
         username: 'Voyageur',
@@ -58,8 +55,23 @@ export const usePlayerStore = defineStore('player', {
         level: 1,
         xp: 0,
         inventory: [
-            { name: 'Hache en pierre', count: 1 } // Item de test
+            // Outils et Equipement (Debug Kit)
+            { name: 'Hache en pierre', count: 1 },
+            { name: 'tool_pickaxe', count: 1 },
+            { name: 'tool_shovel', count: 1 },
+            { name: 'tool_knife', count: 1 },
+            { name: 'gloves', count: 1 },
+            { name: 'watering_can', count: 1 },
+
+            // Ressources et Constructions
+            { name: 'furnace', count: 1 },
+            { name: 'clay_pot', count: 10 },
+            { name: 'raw_clay', count: 20 },
+            { name: 'Bois', count: 20 },
+            { name: 'Pierre', count: 20 },
+            { name: 'cotton_seeds', count: 10 }
         ],
+        nearbyStations: [],
         // Système de survie complet
         stats: {
             health: 100,
@@ -84,6 +96,45 @@ export const usePlayerStore = defineStore('player', {
                 name: 'Hache en pierre',
                 inputs: { 'Bois': 10, 'Pierre': 5 },
                 output: { name: 'Hache en pierre', count: 1 }
+            },
+            {
+                id: 'craft_knife',
+                name: 'Couteau en silex',
+                inputs: { 'Bois': 1, 'Pierre': 1 },
+                output: { name: 'tool_knife', count: 1 }
+            },
+            {
+                id: 'craft_pickaxe',
+                name: 'Pioche en pierre',
+                inputs: { 'Bois': 2, 'Pierre': 2 },
+                output: { name: 'tool_pickaxe', count: 1 }
+            },
+            {
+                id: 'craft_shovel',
+                name: 'Pelle rudimentaire',
+                inputs: { 'Bois': 2, 'Pierre': 1 },
+                output: { name: 'tool_shovel', count: 1 }
+            },
+            // --- NOUVELLES RECETTES ---
+            {
+                id: 'craft_furnace',
+                name: 'Four en pierre',
+                inputs: { 'Pierre': 10 },
+                output: { name: 'furnace', count: 1 }
+            },
+            {
+                id: 'craft_clay_pot',
+                name: 'Pot en argile',
+                inputs: { 'raw_clay': 2, 'Bois': 1 },
+                output: { name: 'clay_pot', count: 1 },
+                station: 'furnace'
+            },
+            {
+                id: 'craft_watering_can',
+                name: 'Arrosoir',
+                inputs: { 'raw_clay': 2, 'Bois': 2 },
+                output: { name: 'watering_can', count: 1 },
+                station: 'furnace'
             }
         ],
         placementMode: false,
@@ -96,15 +147,20 @@ export const usePlayerStore = defineStore('player', {
         }
     }),
     getters: {
-        statsModifiers(state) {
+        statsModifiers(state): { harvestCost: number } {
+            const mainHand = state.equipment.mainHand;
+            // Verif simple pour l'existant. Pour le futur, vérifier toolType via getItemData
+            if (mainHand && (mainHand.name === 'Hache en pierre' || mainHand.name === 'tool_pickaxe' || mainHand.name === 'tool_shovel' || mainHand.name === 'tool_knife')) {
+                return { harvestCost: 1 };
+            }
             return {
-                harvestCost: state.equipment.mainHand?.name === 'Hache en pierre' ? 1 : 3
+                harvestCost: 3
             };
         }
     },
     actions: {
         getItemInfo(itemName: string) {
-            return ITEM_DB[itemName] || { slotType: null };
+            return getItemData(itemName) || { slotType: null, type: 'other' };
         },
 
         setPlacementMode(active: boolean, itemName: string | null = null) {
@@ -238,6 +294,14 @@ export const usePlayerStore = defineStore('player', {
                 return false;
             }
 
+            // 0. Vérification de la station requise
+            if (recipe.station) {
+                if (!this.nearbyStations.includes(recipe.station)) {
+                    this.lastActionFeedback = `Nécessite ${recipe.station} à proximité !#${Date.now()}`;
+                    return false;
+                }
+            }
+
             // 1. Vérification des ressources
             for (const [ingredientName, requiredCount] of Object.entries(recipe.inputs)) {
                 const item = this.inventory.find(i => i.name === ingredientName);
@@ -274,7 +338,7 @@ export const usePlayerStore = defineStore('player', {
             }
 
             // Cas Spécial : Items à placer (Construction)
-            if (itemName === 'Kit de Feu de Camp') {
+            if (['Kit de Feu de Camp', 'furnace', 'clay_pot'].includes(itemName)) {
                 this.setPlacementMode(true, itemName);
                 return;
             }
@@ -328,6 +392,11 @@ export const usePlayerStore = defineStore('player', {
                 console.warn(`[Store] ${itemName} n'a pas d'effet défini et n'est pas équipable`);
                 this.lastActionFeedback = "Rien ne se passe...#" + Date.now();
             }
+        },
+
+        // Helper pour mettre à jour les stations proches (appelé par MapScene/Manager)
+        updateNearbyStations(stations: string[]) {
+            this.nearbyStations = stations;
         }
     }
 });

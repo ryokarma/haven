@@ -51,7 +51,13 @@ export class ObjectManager {
         obj.setData('gridX', x);
         obj.setData('gridY', y);
         obj.setData('type', type); // Sauvegarde du type de base
-        obj.setData('originalTint', 0xffffff); // Default tint
+
+        // Custom Tints based on Type (Override default white)
+        let customTint = 0xffffff;
+
+        obj.setData('originalTint', customTint);
+        obj.setTint(customTint);
+
         if (isPlayerPlaced) {
             obj.setData('isPlayerPlaced', true);
             this.placedObjects.push({ type, x, y, id: `${x},${y}` });

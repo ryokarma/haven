@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { usePlayerStore } from '@/stores/player';
+import { getItemData, type ToolType } from '@/game/config/ItemRegistry';
 import { useWorldStore } from '@/stores/world';
 import { IsoMath } from '@/game/utils/IsoMath';
 import { GameConfig } from '@/game/config/GameConfig';
@@ -35,6 +36,7 @@ export default class MainScene extends Scene {
     private houseRoof: Phaser.GameObjects.Image | null = null;
 
     // État de mouvement
+    private lastGrowthCheck: number = 0;
     private isMoving: boolean = false;
     private currentPath: { x: number; y: number }[] = [];
     private pendingAction: (() => void) | null = null;
@@ -234,7 +236,18 @@ export default class MainScene extends Scene {
         this.events.once('shutdown', this.shutdown, this);
     }
 
-    override update() {
+    override update(time: number, delta: number) {
+        // Mise à jour périodique des stations proches (toutes les 60 frames environ ~1s)
+        if (this.game.loop.frame % 60 === 0) {
+            this.updateNearbyStations();
+        }
+
+        // Système de Croissance (Toutes les 5s)
+        if (time - this.lastGrowthCheck > 5000) {
+            this.checkGrowth();
+            this.lastGrowthCheck = time;
+        }
+
         // Mise à jour du sélecteur de tuile
         this.tileSelector.update(
             this.input.activePointer,
@@ -552,6 +565,25 @@ export default class MainScene extends Scene {
 
             // Feedback
             this.playerStore.lastActionFeedback = "Feu de Camp placé !#" + Date.now();
+        } else if (this.playerStore.placingItemName === 'furnace') {
+            const furnace = this.objectManager.placeObject(x, y, 'furnace', this.mapOriginX, this.mapOriginY, true);
+            furnace.setName('Four en pierre');
+            furnace.setData('type', 'furnace'); // Ensure type is set for Station detection
+
+            // Le four est un obstacle
+            this.mapManager.updateCell(x, y, 1);
+
+            // Consommation de l'item
+            this.playerStore.removeItem(this.playerStore.placingItemName, 1);
+            this.playerStore.lastActionFeedback = "Four placé !#" + Date.now();
+        } else if (this.playerStore.placingItemName === 'clay_pot') {
+            const pot = this.objectManager.placeObject(x, y, 'clay_pot', this.mapOriginX, this.mapOriginY, true);
+            pot.setName('Pot en argile');
+            pot.setData('type', 'clay_pot');
+
+            // Consommation de l'item
+            this.playerStore.removeItem(this.playerStore.placingItemName, 1);
+            this.playerStore.lastActionFeedback = "Pot placé !#" + Date.now();
         }
 
         // Désactivation du mode placement (ou on le laisse pour en placer plusieurs ?) - Désactivation pour l'instant
@@ -560,12 +592,113 @@ export default class MainScene extends Scene {
 
 
     /**
+     * Vérifie la croissance des plantes
+     */
+    private checkGrowth(): void {
+        const objects = this.objectManager.getObjectMap();
+        objects.forEach((obj, key) => {
+            if (obj.getData('type') === 'clay_pot_watered') {
+                if (Math.random() < 0.3) {
+                    const x = obj.getData('gridX');
+                    const y = obj.getData('gridY');
+
+                    this.objectManager.removeObject(x, y);
+
+                    const ready = this.objectManager.placeObject(x, y, 'clay_pot_ready', this.mapOriginX, this.mapOriginY, true);
+                    ready.setName('Pot (Prêt)');
+                    ready.setData('type', 'clay_pot_ready');
+
+                    this.mapManager.updateCell(x, y, 1);
+                }
+            }
+        });
+    }
+
+    /**
      * Gère l'intention de récolter une ressource
      */
     private handleHarvestIntent(targetX: number, targetY: number): void {
         const object = this.objectManager.getObject(targetX, targetY);
         const playerPos = this.player.getGridPosition();
         const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, targetX, targetY);
+
+        // Interaction : Plantation (Pot vide + Graine)
+        if (object && object.getData('type') === 'clay_pot') {
+            if (dist < 2) {
+                const mainHand = this.playerStore.equipment.mainHand;
+                if (mainHand && mainHand.name === 'cotton_seeds') {
+                    // Consommer la graine (Déséquiper -> Retirer 1)
+                    this.playerStore.unequipItem('mainHand');
+                    this.playerStore.removeItem('cotton_seeds', 1);
+
+                    // Remplacer l'objet
+                    const tx = object.getData('gridX');
+                    const ty = object.getData('gridY');
+                    this.objectManager.removeObject(tx, ty);
+
+                    const seededPot = this.objectManager.placeObject(tx, ty, 'clay_pot_seeded', this.mapOriginX, this.mapOriginY, true);
+                    seededPot.setName('Pot (Semis)');
+                    seededPot.setData('type', 'clay_pot_seeded');
+
+                    // Obstacle
+                    this.mapManager.updateCell(tx, ty, 1);
+
+                    this.showFloatingText(object.x, object.y - 50, "Planté !", "#4ade80");
+                    return;
+                }
+            }
+        }
+
+        // Interaction : Arrosage (Pot semé + Arrosoir)
+        if (object && object.getData('type') === 'clay_pot_seeded') {
+            if (dist < 2) {
+                const mainHand = this.playerStore.equipment.mainHand;
+                if (mainHand && mainHand.name === 'watering_can') {
+                    // Arroser
+                    const tx = object.getData('gridX');
+                    const ty = object.getData('gridY');
+                    this.objectManager.removeObject(tx, ty);
+
+                    const wateredPot = this.objectManager.placeObject(tx, ty, 'clay_pot_watered', this.mapOriginX, this.mapOriginY, true);
+                    wateredPot.setName('Pot (Arrosé)');
+                    wateredPot.setData('type', 'clay_pot_watered');
+                    this.mapManager.updateCell(tx, ty, 1);
+
+                    this.showFloatingText(object.x, object.y - 50, "Arrosé !", "#29B6F6");
+                    return;
+                }
+            }
+        }
+
+        // Interaction : Récolte Finale (Pot Prêt + Gants)
+        if (object && object.getData('type') === 'clay_pot_ready') {
+            if (dist < 2) {
+                const accessory = this.playerStore.equipment.accessory;
+                if (accessory?.name === 'gloves') {
+                    // Récolte
+                    const nbPlants = Phaser.Math.Between(2, 4);
+                    const nbSeeds = Phaser.Math.Between(1, 2);
+
+                    this.playerStore.addItem('cotton_plant', nbPlants);
+                    this.playerStore.addItem('cotton_seeds', nbSeeds);
+
+                    const tx = object.getData('gridX');
+                    const ty = object.getData('gridY');
+                    this.objectManager.removeObject(tx, ty);
+
+                    // Reset to empty pot
+                    const pot = this.objectManager.placeObject(tx, ty, 'clay_pot', this.mapOriginX, this.mapOriginY, true);
+                    pot.setName('Pot en argile');
+                    pot.setData('type', 'clay_pot');
+                    this.mapManager.updateCell(tx, ty, 0);
+
+                    this.showFloatingText(object.x, object.y - 50, `+${nbPlants} Coton`, "#4ade80");
+                    return;
+                } else {
+                    this.showFloatingText(object.x, object.y - 50, "Il faut des gants !", "#ef4444");
+                }
+            }
+        }
 
         // Interaction spéciale : Pommier (sans détruire l'arbre)
         if (object && object.getData('subType') === 'apple_tree') {
@@ -628,6 +761,31 @@ export default class MainScene extends Scene {
         const object = this.objectManager.getObject(x, y);
 
         if (object) {
+            const type = object.getData('type');
+            const mainHand = this.playerStore.equipment.mainHand;
+            const toolData = mainHand ? getItemData(mainHand.name) : null;
+            const currentToolType = toolData?.toolType || 'none';
+
+            let requiredTool: ToolType | 'any' = 'none';
+            let requiredToolName = '';
+
+            if (type === 'rock') { requiredTool = 'pickaxe'; requiredToolName = 'une pioche'; }
+            else if (type === 'tree') { requiredTool = 'axe'; requiredToolName = 'une hache'; }
+            else if (type === 'cotton_bush') {
+                if (this.playerStore.equipment.accessory?.name === 'gloves') {
+                    requiredTool = 'none';
+                } else {
+                    requiredTool = 'knife'; requiredToolName = 'un couteau';
+                }
+            }
+            else if (type === 'clay_mound') { requiredTool = 'shovel'; requiredToolName = 'une pelle'; }
+
+            // Vérification de l'outil
+            if (requiredTool !== 'none' && currentToolType !== requiredTool) {
+                this.showFloatingText(object.x, object.y - 50, `Il faut ${requiredToolName} !`, "#ef4444");
+                return;
+            }
+
             // Calcul du coût de récolte basé sur l'équipement
             const harvestCost = this.playerStore.statsModifiers.harvestCost;
 
@@ -642,7 +800,7 @@ export default class MainScene extends Scene {
             const isEfficient = harvestCost < 3;
             // Green if efficient, white if normal
             const color = isEfficient ? "#4ade80" : "#ffffff";
-            const text = isEfficient ? `- ${harvestCost} Énergie (Hache)` : `- ${harvestCost} Énergie`;
+            const text = isEfficient ? `- ${harvestCost} Énergie` : `- ${harvestCost} Énergie`;
 
             this.showFloatingText(object.x, object.y - 80, text, color);
 
@@ -654,11 +812,21 @@ export default class MainScene extends Scene {
                 duration: 50,
                 repeat: 3,
                 onComplete: () => {
-                    const textureKey = object.texture.key;
                     let itemDropped = '';
 
-                    if (textureKey === 'tree') itemDropped = 'Bois';
-                    else if (textureKey === 'rock') itemDropped = 'Pierre';
+                    let count = 1;
+
+                    if (type === 'tree') itemDropped = 'Bois';
+                    else if (type === 'rock') itemDropped = 'Pierre';
+                    else if (type === 'cotton_bush') {
+                        if (this.playerStore.equipment.accessory?.name === 'gloves') {
+                            itemDropped = 'cotton_seeds';
+                            count = Phaser.Math.Between(1, 3);
+                        } else {
+                            itemDropped = 'cotton_plant';
+                        }
+                    }
+                    else if (type === 'clay_mound') itemDropped = 'raw_clay';
 
                     this.objectManager.removeObject(x, y);
 
@@ -667,8 +835,8 @@ export default class MainScene extends Scene {
                     this.pathfindingManager.updateGrid(this.mapManager.gridData);
 
                     if (itemDropped) {
-                        this.playerStore.addItem(itemDropped);
-                        this.showFloatingText(object.x, object.y - 50, `+1 ${itemDropped}`, "#fbbf24"); // Ambre/Jaune
+                        this.playerStore.addItem(itemDropped, count);
+                        this.showFloatingText(object.x, object.y - 50, `+${count} ${itemDropped}`, "#fbbf24"); // Ambre/Jaune
                     }
                 }
             });
@@ -804,5 +972,29 @@ export default class MainScene extends Scene {
      */
     private isValidTile(x: number, y: number): boolean {
         return x >= 0 && x < GameConfig.MAP_SIZE && y >= 0 && y < GameConfig.MAP_SIZE;
+    }
+
+    /**
+     * Met à jour la liste des stations de craft proches
+     */
+    private updateNearbyStations(): void {
+        const playerPos = this.player.getGridPosition();
+        const range = 3; // Rayon de détection
+        const stations: string[] = [];
+
+        // Scan simple des objets proches
+        for (let dy = -range; dy <= range; dy++) {
+            for (let dx = -range; dx <= range; dx++) {
+                const checkX = playerPos.x + dx;
+                const checkY = playerPos.y + dy;
+                const obj = this.objectManager.getObject(checkX, checkY);
+                if (obj) {
+                    const type = obj.getData('type');
+                    if (type === 'furnace') stations.push('furnace');
+                }
+            }
+        }
+
+        this.playerStore.updateNearbyStations(stations);
     }
 }
