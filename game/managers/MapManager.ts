@@ -125,8 +125,8 @@ export class MapManager {
                 let cellType = row[x];
                 const isInHouse = this.isInsideHouse(x, y);
 
-                // Chance d'obstacle
-                if (cellType === 0 && !isInHouse && (x > 5 || y > 5)) {
+                // Chance d'obstacle (Désactivé pour la session 4.1 : Server Authority)
+                /* if (cellType === 0 && !isInHouse && (x > 5 || y > 5)) {
                     const rnd = this.rnd.frac();
                     const resources = GameConfig.MAP_GENERATION.resources;
 
@@ -143,7 +143,7 @@ export class MapManager {
                         this.objectManager.placeObject(x, y, type, this.mapOriginX, this.mapOriginY);
                         row[x] = 1;
                     }
-                }
+                } */
 
                 let tileKey = '';
                 if (isInHouse) {
@@ -167,11 +167,11 @@ export class MapManager {
                     cellType
                 );
 
-                // Affichage Objet
-                if (cellType === 1) {
+                // Affichage Objet (Désactivé aussi pour éviter les duplicatas si mapData était utilisé autrement)
+                /* if (cellType === 1) {
                     const type = this.rnd.frac() > GameConfig.MAP_GENERATION.treeVsRockRatio ? 'tree' : 'rock';
                     this.objectManager.placeObject(x, y, type, this.mapOriginX, this.mapOriginY);
-                }
+                } */
             }
         }
     }
@@ -194,6 +194,59 @@ export class MapManager {
     public updateCell(x: number, y: number, type: number): void {
         if (this._gridData[y]) {
             this._gridData[y][x] = type;
+        }
+    }
+    /**
+     * Peuple la carte depuis l'état serveur
+     */
+    public populateFromState(resources: any[]): void {
+        console.log(`[MapManager] Populating map with ${resources.length} resources from server.`);
+
+        // Optionnel: Nettoyer les objets existants si on recharge tout (sauf ceux du joueur si on sépare ?)
+        // Pour l'instant on suppose que c'est une init initiale.
+
+        resources.forEach(res => {
+            // Les coordonnées serveur sont en GRID
+            // placeObject attend (gridX, gridY, type, mapOrigins...)
+            this.objectManager.placeObject(res.x, res.y, res.type, this.mapOriginX, this.mapOriginY, false, res.id);
+
+            // On met à jour la grille locale pour le pathfinding / collisions
+            // 1 = Obstacle
+            this.updateCell(res.x, res.y, 1);
+        });
+    }
+
+    /**
+     * Ajoute une ressource (venant du serveur)
+     */
+    public addResource(resource: any): void {
+        this.objectManager.placeObject(
+            resource.x,
+            resource.y,
+            resource.type,
+            this.mapOriginX,
+            this.mapOriginY,
+            false,
+            resource.id
+        );
+        this.updateCell(resource.x, resource.y, 1);
+    }
+
+    /**
+     * Supprime une ressource (venant du serveur)
+     */
+    public removeResource(id: string, x?: number, y?: number): void {
+        if (x !== undefined && y !== undefined) {
+            // Suppression rapide par coord
+            this.objectManager.removeObject(x, y);
+            this.updateCell(x, y, 0);
+        } else {
+            // Fallback par ID
+            // Note: updateCell sera plus dur sans x,y si ObjectManager ne retourne pas l'obj détruit
+            // Mais on va supposer que le serveur envoie x,y (ajouté dans le backend)
+            this.objectManager.removeObjectById(id);
+            // TODO: Retrouver les coords pour updateCell(0) si x,y manquants ?
+            // Pour l'instant on compte sur le backend qui envoie x,y
         }
     }
 }

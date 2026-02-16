@@ -17,7 +17,16 @@ const getIngredientCount = (ingredientName: string) => {
   return item ? item.count : 0;
 };
 
+const hasRequiredStation = (recipe: Recipe) => {
+  if (!recipe.station) return true;
+  return player.nearbyStations.includes(recipe.station);
+};
+
 const canCraft = (recipe: Recipe) => {
+  // 1. Station check
+  if (!hasRequiredStation(recipe)) return false;
+
+  // 2. Resources check
   for (const [name, count] of Object.entries(recipe.inputs)) {
     if (getIngredientCount(name) < count) return false;
   }
@@ -59,7 +68,13 @@ const craft = (recipe: Recipe) => {
                 <div class="flex items-center justify-between">
                     <div class="flex flex-col">
                         <span class="font-bold text-lg text-amber-100 group-hover:text-amber-50 transition-colors">{{ recipe.name }}</span>
-                        <span class="text-xs text-slate-400">Produit: {{ recipe.output.count }}x {{ recipe.output.name }}</span>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-slate-400">Produit: {{ recipe.output.count }}x {{ recipe.output.name }}</span>
+                            <span v-if="recipe.station" class="text-xs font-bold px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700"
+                                  :class="hasRequiredStation(recipe) ? 'text-green-400 border-green-900/50' : 'text-red-400 border-red-900/50'">
+                                  Station requise : {{ recipe.station }}
+                            </span>
+                        </div>
                     </div>
                 </div>
 
@@ -92,7 +107,9 @@ const craft = (recipe: Recipe) => {
                         :class="canCraft(recipe) 
                             ? 'bg-amber-500 text-slate-900 hover:bg-amber-400 hover:scale-[1.02] hover:shadow-amber-500/20 active:scale-95' 
                             : 'bg-slate-800 text-slate-500 cursor-not-allowed opacity-50 border-white/5'">
+                    
                     <span v-if="canCraft(recipe)">🔨 Fabriquer</span>
+                    <span v-else-if="!hasRequiredStation(recipe)" class="flex items-center gap-1">⚠️ Trop loin de la station : {{ recipe.station }}</span>
                     <span v-else class="flex items-center gap-1">❌ Manque de ressources</span>
                 </button>
              </div>

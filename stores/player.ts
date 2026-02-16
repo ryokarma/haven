@@ -23,6 +23,8 @@ export interface PlayerState {
     level: number;
     xp: number;
     inventory: InventoryItem[];
+    // Inventaire Economique (Portefeuille Serveur)
+    economyInventory: Record<string, number>;
     // Ajout état pour les stations proches
     nearbyStations: string[];
     stats: {
@@ -71,6 +73,7 @@ export const usePlayerStore = defineStore('player', {
             { name: 'Pierre', count: 20 },
             { name: 'cotton_seeds', count: 10 }
         ],
+        economyInventory: { wood: 0, stone: 0 },
         nearbyStations: [],
         // Système de survie complet
         stats: {
@@ -169,6 +172,13 @@ export const usePlayerStore = defineStore('player', {
             if (active && itemName) {
                 this.lastActionFeedback = `Mode placement : ${itemName}#${Date.now()}`;
             }
+            if (active && itemName) {
+                this.lastActionFeedback = `Mode placement : ${itemName}#${Date.now()}`;
+            }
+        },
+
+        updateEconomyInventory(newInventory: Record<string, number>) {
+            this.economyInventory = newInventory;
         },
 
         // ... (existing actions)

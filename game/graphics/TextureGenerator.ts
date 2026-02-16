@@ -119,8 +119,11 @@ export class TextureGenerator {
             g.closePath();
             g.fillPath();
             // Contour subtil pour la maison
-            g.lineStyle(1, 0x5D4037, 0.5);
-            g.strokePath();
+            const SHOW_DEBUG_GRID = false;
+            if (SHOW_DEBUG_GRID) {
+                g.lineStyle(1, 0x5D4037, 0.5);
+                g.strokePath();
+            }
             g.generateTexture('floor_wood', W, H);
             g.destroy();
         }

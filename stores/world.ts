@@ -3,12 +3,15 @@ import { defineStore } from 'pinia';
 export interface WorldState {
     worldSeed: string;
     time: number;
+    isMapLoaded: boolean;
 }
+
 
 export const useWorldStore = defineStore('world', {
     state: (): WorldState => ({
         worldSeed: '',
-        time: 480 // Commence à 08:00
+        time: 480, // Commence à 08:00
+        isMapLoaded: false
     }),
     getters: {
         hours: (state) => Math.floor(state.time / 60),
@@ -29,6 +32,10 @@ export const useWorldStore = defineStore('world', {
             if (this.time >= 1440) {
                 this.time = this.time % 1440;
             }
+        },
+
+        setMapLoaded(loaded: boolean) {
+            this.isMapLoaded = loaded;
         },
 
         /**
@@ -56,6 +63,12 @@ export const useWorldStore = defineStore('world', {
             this.worldSeed = Math.random().toString(36).substring(2, 12).toUpperCase();
             localStorage.setItem('haven_world_seed', this.worldSeed);
             console.log(`[WorldStore] Seed régénérée: ${this.worldSeed}`);
+        },
+
+        loadWorldState(payload: any) {
+            // Pour l'instant on stocke juste l'info si besoin, mais c'est le MapManager qui fera le rendu.
+            // On pourrait stocker les ressources ici si on voulait une source de vérité côté client.
+            console.log('[WorldStore] État du monde reçu du serveur', payload);
         }
     }
 });

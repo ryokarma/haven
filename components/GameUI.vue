@@ -128,6 +128,21 @@ const handleItemClick = (itemName: string) => {
         </div>
     </div>
 
+        </div>
+    </div>
+
+    <!-- WALLET DISPLAY (Coin supérieur gauche) -->
+    <div class="pointer-events-auto absolute top-4 left-4 z-40 flex flex-col gap-2">
+        <div class="flex items-center gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-3 py-1.5 rounded-lg shadow-lg">
+            <span v-html="icons.wood" class="text-amber-600 scale-75"></span>
+            <span class="font-mono font-bold text-amber-100">{{ player.economyInventory.wood || 0 }}</span>
+        </div>
+        <div class="flex items-center gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-3 py-1.5 rounded-lg shadow-lg">
+            <span v-html="icons.stone" class="text-stone-400 scale-75"></span>
+            <span class="font-mono font-bold text-stone-200">{{ player.economyInventory.stone || 0 }}</span>
+        </div>
+    </div>
+
     <div v-if="isInventoryOpen" class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all">
       <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20">
         

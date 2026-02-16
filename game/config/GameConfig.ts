@@ -127,13 +127,13 @@ export const ASSET_MANIFEST: Record<string, AssetDefinition> = {
         assetKey: 'tex_cotton_bush',
         pixelHeight: 64,
         originX: 0.5,
-        originY: 0.8
+        originY: 1.0
     },
     'clay_mound': {
         assetKey: 'tex_clay_mound',
         pixelHeight: 64,
         originX: 0.5,
-        originY: 0.72
+        originY: 0.5
     },
     'watering_can': {
         assetKey: 'tex_watering_can',

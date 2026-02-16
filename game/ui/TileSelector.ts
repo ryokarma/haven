@@ -8,7 +8,7 @@ import { GameConfig } from '../config/GameConfig';
  */
 export class TileSelector {
     private scene: Phaser.Scene;
-    private graphics: Phaser.GameObjects.Graphics;
+    private reticle: Phaser.GameObjects.Graphics;
     private mapOriginX: number;
     private mapOriginY: number;
     private gridSize: number;
@@ -19,32 +19,51 @@ export class TileSelector {
         this.mapOriginY = mapOriginY;
         this.gridSize = gridSize;
 
-        this.graphics = scene.add.graphics();
-        this.createSelector();
+        this.reticle = scene.add.graphics();
+        this.createReticle();
     }
 
     /**
-     * Crée le graphique du sélecteur
+     * Crée le réticule (Curseur Graphique)
      */
-    private createSelector(): void {
-        this.graphics.lineStyle(
-            GameConfig.SELECTOR.lineWidth,
-            GameConfig.SELECTOR.normalColor,
-            GameConfig.SELECTOR.normalAlpha
-        );
+    private createReticle(): void {
+        this.reticle.clear();
 
-        const pts = IsoMath.getDebugPoints();
-        if (pts.length > 0) {
-            this.graphics.beginPath();
-            this.graphics.moveTo(pts[0]!.x, pts[0]!.y);
-            for (let i = 1; i < pts.length; i++) {
-                this.graphics.lineTo(pts[i]!.x, pts[i]!.y);
-            }
-            this.graphics.closePath();
-            this.graphics.strokePath();
-        }
-        this.graphics.setVisible(false);
-        this.graphics.setDepth(99999);
+        // Dessine un losange isométrique propre
+        // Couleur blanche, alpha 0.5, épaisseur 2
+        this.reticle.lineStyle(2, 0xffffff, 0.5);
+        this.reticle.fillStyle(0xffffff, 0.1); // Remplissage très léger
+
+        // Points relatifs pour un losange isométrique standard (taille d'une tuile)
+        // Utilsant IsoMath.TILE_WIDTH et TILE_HEIGHT implicitement ou via config
+        // On dessine le losange centré sur 0,0
+        const w = IsoMath.TILE_WIDTH;
+        const h = IsoMath.TILE_HEIGHT;
+
+        this.reticle.beginPath();
+        this.reticle.moveTo(0, -h / 2);
+        this.reticle.lineTo(w / 2, 0);
+        this.reticle.lineTo(0, h / 2);
+        this.reticle.lineTo(-w / 2, 0);
+        this.reticle.closePath();
+
+        this.reticle.strokePath();
+        this.reticle.fillPath();
+
+        this.reticle.setVisible(false);
+        this.reticle.setDepth(99999); // Toujours au-dessus
+
+        // Animation "Breathing"
+        this.scene.tweens.add({
+            targets: this.reticle,
+            scaleX: 1.05,
+            scaleY: 1.05,
+            alpha: 0.8,
+            duration: 800,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut'
+        });
     }
 
     /**
@@ -55,43 +74,30 @@ export class TileSelector {
         const coords = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
 
         if (this.isValidTile(coords.x, coords.y)) {
-            this.graphics.setVisible(true);
+            this.reticle.setVisible(true);
             const isoPt = IsoMath.gridToIso(coords.x, coords.y, this.mapOriginX, this.mapOriginY);
-            this.graphics.setPosition(isoPt.x, isoPt.y);
+            this.reticle.setPosition(isoPt.x, isoPt.y);
 
-            // Change la couleur selon si c'est un obstacle ou de l'eau (non marchable)
+            // Change la couleur selon si c'est un obstacle ou de l'eau
+            // On peut modifier le tint ou redessiner si nécessaire, mais le tint est plus performant sur Graphics ?
+            // Graphics n'a pas setTint universellement simple sans pipeline, 
+            // on va simplifier : si obstacle, on change l'alpha ou la couleur via clear/redraw si besoin, 
+            // mais l'instruction demande surtout un "Réticule" subtil.
+            // On peut garder le blanc par défaut, ou passer au rouge si bloqué ?
+            // L'instruction : "On ne veut voir QUE la case survolée."
+
             const isWalkable = gridData[coords.y] &&
                 gridData[coords.y][coords.x] !== undefined &&
                 gridData[coords.y][coords.x] === 0;
 
             if (!isWalkable) {
-                this.graphics.clear();
-                this.graphics.lineStyle(
-                    GameConfig.SELECTOR.lineWidth,
-                    GameConfig.SELECTOR.obstacleColor,
-                    GameConfig.SELECTOR.obstacleAlpha
-                );
-            } else {
-                this.graphics.clear();
-                this.graphics.lineStyle(
-                    GameConfig.SELECTOR.lineWidth,
-                    GameConfig.SELECTOR.normalColor,
-                    GameConfig.SELECTOR.normalAlpha
-                );
+                // Optionnel : Rouge si bloqué, mais "subtil" demandé.
+                // Reset to white logic implicitly or change prop if needed.
+                // Pour l'instant on garde le style "Propre" blanc défini dans createReticle.
             }
 
-            const pts = IsoMath.getDebugPoints();
-            if (pts.length > 0) {
-                this.graphics.beginPath();
-                this.graphics.moveTo(pts[0].x, pts[0].y);
-                for (let i = 1; i < pts.length; i++) {
-                    this.graphics.lineTo(pts[i].x, pts[i].y);
-                }
-                this.graphics.closePath();
-                this.graphics.strokePath();
-            }
         } else {
-            this.graphics.setVisible(false);
+            this.reticle.setVisible(false);
         }
     }
 
@@ -106,6 +112,6 @@ export class TileSelector {
      * Détruit le sélecteur
      */
     destroy(): void {
-        this.graphics.destroy();
+        this.reticle.destroy();
     }
 }

@@ -1,5 +1,6 @@
 import { Scene } from 'phaser';
 import { usePlayerStore } from '@/stores/player';
+import { useNetworkStore } from '@/stores/network';
 import { getItemData, type ToolType } from '@/game/config/ItemRegistry';
 import { useWorldStore } from '@/stores/world';
 import { IsoMath } from '@/game/utils/IsoMath';
@@ -7,60 +8,48 @@ import { GameConfig } from '@/game/config/GameConfig';
 import { TextureGenerator } from '@/game/graphics/TextureGenerator';
 import { PathfindingManager } from '@/game/managers/PathfindingManager';
 import { TileManager } from '@/game/managers/TileManager';
-import { ObjectManager } from '@/game/managers/ObjectManager';
+import { ObjectManager, RENDER_OFFSETS } from '@/game/managers/ObjectManager';
 import { AmbianceManager } from '@/game/managers/AmbianceManager';
 import { MapManager } from '@/game/managers/MapManager';
 import { SaveManager, type GameState } from '@/game/managers/SaveManager';
+import { InputManager } from '@/game/managers/InputManager';
 import { TileSelector } from '@/game/ui/TileSelector';
 import { Player } from '@/game/entities/Player';
 
-/**
- * Scène principale du jeu
- * Point central qui orchestre tous les managers et la logique de jeu
- */
-export default class MainScene extends Scene {
+export class MainScene extends Scene {
+    // Stores
+    private playerStore!: ReturnType<typeof usePlayerStore>;
+    private worldStore!: ReturnType<typeof useWorldStore>;
+
+    // Config
+    private mapOriginX!: number;
+    private mapOriginY!: number;
+
     // Managers
-    private pathfindingManager!: PathfindingManager;
     private tileManager!: TileManager;
     private objectManager!: ObjectManager;
     private ambianceManager!: AmbianceManager;
-    private mapManager!: MapManager;
     private saveManager!: SaveManager;
-    private tileSelector!: TileSelector;
+    private mapManager!: MapManager;
+    private pathfindingManager!: PathfindingManager;
     private textureGenerator!: TextureGenerator;
 
     // Entities
+    private tileSelector!: TileSelector;
     private player!: Player;
+    private houseRoof?: Phaser.GameObjects.Image;
+    private placementGhost: Phaser.GameObjects.Image | null = null;
 
-    // Visuals
-    private houseRoof: Phaser.GameObjects.Image | null = null;
-
-    // État de mouvement
+    // State
+    private survivalTimer?: Phaser.Time.TimerEvent;
+    private worldTimer?: Phaser.Time.TimerEvent;
     private lastGrowthCheck: number = 0;
     private isMoving: boolean = false;
     private currentPath: { x: number; y: number }[] = [];
     private pendingAction: (() => void) | null = null;
 
-    // Coordonnées de la carte
-    private mapOriginX = 0;
-    private mapOriginY = 0;
-
-    // Navigation & UI
-    private isDraggingMap = false;
-    private dragStartX = 0;
-    private dragStartY = 0;
-    private ignoreNextMapClick = false;
-
-    // Store (Typed)
-    private playerStore!: ReturnType<typeof usePlayerStore>;
-    private worldStore!: ReturnType<typeof useWorldStore>;
-    // Timer
-    private survivalTimer!: Phaser.Time.TimerEvent;
-    private worldTimer!: Phaser.Time.TimerEvent;
-
-    // Mode Placement
-    private ghostObject: Phaser.GameObjects.Image | null = null;
-    private ghostTween: Phaser.Tweens.Tween | null = null;
+    // Input Manager
+    private inputManager!: InputManager;
 
     constructor() {
         super('MainScene');
@@ -92,6 +81,9 @@ export default class MainScene extends Scene {
         this.objectManager = new ObjectManager(this);
         this.ambianceManager = new AmbianceManager(this);
         this.saveManager = new SaveManager(this, this.objectManager);
+
+        // Input Manager (Initialisé tôt pour capturer les events si besoin)
+        this.inputManager = new InputManager(this, this.mapOriginX, this.mapOriginY);
 
         // Map Manager (Handles Data & Generation)
         this.mapManager = new MapManager(
@@ -133,8 +125,8 @@ export default class MainScene extends Scene {
             savedGame.map.removedObjectIds.forEach(id => {
                 // ID format "x,y"
                 const parts = id.split(',');
-                const x = parseInt(parts[0]);
-                const y = parseInt(parts[1]);
+                const x = parseInt(parts[0] as string);
+                const y = parseInt(parts[1] as string);
                 this.objectManager.removeObject(x, y);
                 this.mapManager.updateCell(x, y, 0); // Libère la tuile (important pour pathfinding)
             });
@@ -203,7 +195,7 @@ export default class MainScene extends Scene {
         // Création de l'ambiance
         this.ambianceManager.createFireflies(this.player.getSprite());
 
-        // Configuration des événements d'entrée
+        // Configuration des événements d'entrée via InputManager
         this.setupInputEvents();
 
         // Vérifier la visibilité du toit
@@ -232,6 +224,67 @@ export default class MainScene extends Scene {
             loop: true
         });
 
+
+        // Notifier le store que le chargement est terminé pour enlever l'écran de chargement
+        // Notifier le store que le chargement est terminé pour enlever l'écran de chargement
+        const worldStore = useWorldStore();
+        worldStore.setMapLoaded(true);
+
+        // --- MULTIJOUEUR ---
+        const networkStore = useNetworkStore();
+        networkStore.listenForWalletUpdates(); // Start listening for economy
+
+        // Abonnement aux messages
+        networkStore.onMessage((msg: any) => {
+            if (msg.type === 'PLAYER_JOINED') {
+                // Spawn new player
+                // Default specific coordinates for now: 200, 200 (screen space, temporary)
+                // We will simply use 10,10 grid coordinates converted to iso for stability
+                const spawnGrid = { x: 10, y: 10 };
+                const isoPos = IsoMath.gridToIso(spawnGrid.x, spawnGrid.y, this.mapOriginX, this.mapOriginY);
+                this.objectManager.addRemotePlayer(msg.id, isoPos.x, isoPos.y);
+
+                this.showFloatingText(isoPos.x, isoPos.y - 120, "Un joueur arrive !", "#ffffff");
+            }
+            else if (msg.type === 'PLAYER_LEFT') {
+                this.objectManager.removeRemotePlayer(msg.id);
+            }
+            else if (msg.type === 'CURRENT_PLAYERS') {
+                if (msg.players && Array.isArray(msg.players)) {
+                    msg.players.forEach((pid: string) => {
+                        // Similar spawn logic
+                        const spawnGrid = { x: 10, y: 10 };
+                        const isoPos = IsoMath.gridToIso(spawnGrid.x, spawnGrid.y, this.mapOriginX, this.mapOriginY);
+                        this.objectManager.addRemotePlayer(pid, isoPos.x, isoPos.y);
+                    });
+                }
+            }
+            else if (msg.type === 'PLAYER_MOVED') {
+                this.objectManager.moveRemotePlayer(msg.id, msg.x, msg.y);
+            }
+            else if (msg.type === 'WORLD_STATE') {
+                if (msg.payload && msg.payload.resources) {
+                    this.mapManager.populateFromState(msg.payload.resources);
+                }
+            }
+            else if (msg.type === 'RESOURCE_PLACED') {
+                this.mapManager.addResource(msg.resource);
+            }
+            else if (msg.type === 'RESOURCE_REMOVED') {
+                this.mapManager.removeResource(msg.id, msg.x, msg.y);
+            }
+            else if (msg.type === 'PLAYER_SYNC') {
+                const userData = msg.payload;
+                if (userData && userData.x !== undefined && userData.y !== undefined) {
+                    console.log(`[MainScene] Sync Player Position to ${userData.x}, ${userData.y}`);
+                    this.player.setIsoPosition(userData.x, userData.y, this.mapOriginX, this.mapOriginY);
+
+                    // Centrer caméra
+                    this.cameras.main.centerOn(userData.x, userData.y);
+                }
+            }
+        });
+
         // Cleanup on shutdown
         this.events.once('shutdown', this.shutdown, this);
     }
@@ -248,7 +301,10 @@ export default class MainScene extends Scene {
             this.lastGrowthCheck = time;
         }
 
-        // Mise à jour du sélecteur de tuile
+        // Mise à jour du sélecteur de tuile (Désormais géré via l'update loop pour la fluidité)
+        // Mais InputManager pourrait aussi envoyer des events 'hover'.
+        // Pour l'instant on garde le polling via InputManager ou native input ?
+        // On va garder le polling native pour la fluidité du reticule, ou utiliser le pointeur actif.
         this.tileSelector.update(
             this.input.activePointer,
             this.cameras.main,
@@ -315,95 +371,87 @@ export default class MainScene extends Scene {
     }
 
     /**
-     * Gestion de la chaleur (Bonus d'énergie)
+     * Configure tous les événements d'entrée via InputManager
      */
-    private handleCampfireWarmth(): void {
-        const playerPos = this.player.getGridPosition();
-        let nearFire = false;
+    private setupInputEvents(): void {
 
-        // On itère sur tous les objets pour trouver les feux de camp
-        // Note: Pour optimiser, on pourrait garder une liste séparée des feux
-        const objects = this.objectManager.getObjectMap();
+        // Clic Gauche : Déplacement ou Placement
+        this.inputManager.events.on('tile-clicked', (event: any) => {
+            const { x, y } = event;
+            this.handleLeftClick(x, y);
+        });
 
-        for (const [key, obj] of objects.entries()) {
-            if (obj.getData('type') === 'campfire') {
-                const fireX = obj.getData('gridX');
-                const fireY = obj.getData('gridY');
-                const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, fireX, fireY);
+        // Clic Droit : Interaction (Récolte, Utilisation)
+        this.inputManager.events.on('tile-interact', (event: any) => {
+            const { x, y } = event;
+            // Pour l'instant, on envoie l'interaction au serveur pour le toggle ressource
+            // (Session 4.2 Interaction Serveur)
+            // On commente les handlers locaux précédents qui étaient purement clients ?
+            // Ou on garde les deux ? Le user demande "Connecte InputManager.onRightClick -> networkStore.sendInteract"
 
-                if (dist < 3) { // Moins de 3 cases
-                    nearFire = true;
-                    break;
-                }
-            }
-        }
+            // On va supposer que le clic droit sert now à TESTER l'interaction serveur.
+            // On garde handleInteraction si c'est pour l'usage outils (inventory), mais le prompt veut modifier le monde via serveur.
 
-        if (nearFire) {
-            // Bonus : Régénération d'énergie passive ou réduction de la perte
-            if (this.playerStore.stats.energy < this.playerStore.stats.maxEnergy) {
-                this.playerStore.updateStats({ energy: this.playerStore.stats.energy + 2 });
+            const networkStore = useNetworkStore();
+            networkStore.sendInteract(x, y);
 
-                // Petit feedback visuel (Texte flottant occasionnel)
-                if (Math.random() < 0.2) {
-                    this.showFloatingText(this.player.getSprite().x, this.player.getSprite().y - 60, "♨️ Au chaud", "#fb923c");
-                }
-            }
-        }
+            // On garde quand même le handler local pour le feedback immédiat ou autres features existantes (Harvest) ?
+            // Le prompt dit : "Permettre au joueur de modifier l'état du monde... via le serveur."
+            // "Le serveur est maître : le client ne pose rien tant qu'il n'a pas reçu le RESOURCE_PLACED"
+            // Donc on ne doit PAS appeler handleInteraction (local) qui fait removeObject directement !
+            // MAIS handleInteraction gérait aussi l'inventaire, les outils, etc. 
+            // Pour cette session, on priorise le test serveur. On commente l'ancien handler temporairement 
+            // ou on le déplace sur une autre touche.
+
+            // this.handleInteraction(x, y);
+        });
     }
 
     /**
-     * Logic du fantôme de placement
+     * Gère le clic gauche (Mouvement ou Placement)
      */
-    private updatePlacementGhost(): void {
-        const pointer = this.input.activePointer;
+    private handleLeftClick(x: number, y: number): void {
+        const gridData = this.mapManager.gridData;
 
-        if (!this.playerStore.placementMode) {
-            if (this.ghostObject) {
-                this.ghostObject.destroy();
-                this.ghostObject = null;
-                if (this.ghostTween) {
-                    this.ghostTween.stop();
-                    this.ghostTween = null;
-                }
+        if (!this.isValidTile(x, y)) return;
+
+        // --- SECTION : PLACEMENT D'OBJET ---
+        if (this.playerStore.placementMode && this.playerStore.placingItemName) {
+            // Vérification si la case est libre
+            const isOccupied = this.objectManager.hasObject(x, y) ||
+                gridData[y]?.[x] !== 0; // 0 = vide/herbe
+
+            if (!isOccupied) {
+                this.handlePlacement(x, y);
+            } else {
+                this.playerStore.lastActionFeedback = "Impossible de placer ici !#" + Date.now();
             }
             return;
         }
 
-        const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-        const target = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
+        // --- SECTION : MOUVEMENT STANDARD ---
 
-        // Créer le fantôme s'il n'existe pas
-        if (!this.ghostObject) {
-            // On utilise 'rock' comme base pour le campfire pour l'instant
-            this.ghostObject = this.add.image(0, 0, 'rock');
-            this.ghostObject.setAlpha(0.6);
-            this.ghostObject.setTint(0xffaa00);
-            this.ghostObject.setOrigin(0.5, 1);
-
-            // Animation de pulsation
-            this.ghostTween = this.tweens.add({
-                targets: this.ghostObject,
-                scale: 1.1,
-                alpha: 0.4,
-                duration: 800,
-                yoyo: true,
-                repeat: -1
-            });
+        // Cas spécial : Récolte d'eau (Left Click autorisé pour fluidité)
+        const playerPos = this.player.getGridPosition();
+        const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, x, y);
+        if (gridData[y]?.[x] === 2 && dist < 2) {
+            // On délègue à l'interaction pour l'eau aussi par simplicité ou on garde ?
+            // Pour l'instant on garde le move sauf si c'est de l'eau proche
+            this.handleInteraction(x, y);
+            return;
         }
 
-        // Positionner le fantôme
-        if (this.isValidTile(target.x, target.y)) {
-            const isoPos = IsoMath.gridToIso(target.x, target.y, this.mapOriginX, this.mapOriginY);
-            this.ghostObject.setPosition(isoPos.x, isoPos.y);
-            this.ghostObject.setDepth(999999);
+        // Sinon, Déplacement
+        this.startMove(x, y, null);
+    }
 
-            // Indiquer la validité (Vert si vide, Rouge si occupé)
-            const isOccupied = this.objectManager.hasObject(target.x, target.y) ||
-                this.mapManager.gridData[target.y]?.[target.x] !== 0;
-
-            this.ghostObject.setTint(isOccupied ? 0xff0000 : 0x00ff00);
-        } else {
-            this.ghostObject.setVisible(false);
+    /**
+     * Gère l'interaction (Clic Droit ou spécial)
+     */
+    private handleInteraction(x: number, y: number): void {
+        // Tentative de récolte / Utilisation
+        if (this.isValidTile(x, y)) {
+            this.handleHarvestIntent(x, y);
         }
     }
 
@@ -413,129 +461,11 @@ export default class MainScene extends Scene {
     private shutdown() {
         if (this.survivalTimer) this.survivalTimer.destroy();
         if (this.worldTimer) this.worldTimer.destroy();
-        this.input.off('gameobjectup');
-        this.input.off('pointerdown');
-        this.input.off('pointermove');
-        this.input.off('wheel');
-        this.input.off('pointerup');
+
+        if (this.inputManager) this.inputManager.destroy();
 
         if (this.tileManager) this.tileManager.destroy();
         // Add other destroy calls if managers implement them
-    }
-
-    /**
-     * Configure tous les événements d'entrée
-     */
-    private setupInputEvents(): void {
-        // Clic sur un objet
-        this.input.on('gameobjectup', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.Image) => {
-            // Empêche la récolte si on est en mode placement
-            if (this.playerStore.placementMode) return;
-
-            const gridX = gameObject.getData('gridX');
-            const gridY = gameObject.getData('gridY');
-            if (gridX !== undefined && gridY !== undefined) {
-                this.handleHarvestIntent(gridX, gridY);
-                this.ignoreNextMapClick = true;
-            }
-        });
-
-        // Début du drag
-        this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-            this.dragStartX = pointer.x;
-            this.dragStartY = pointer.y;
-            this.isDraggingMap = false;
-        });
-
-        // Déplacement de la carte
-        this.input.on('pointermove', (pointer: Phaser.Input.Pointer) => {
-            if (pointer.isDown && pointer.prevPosition) {
-                this.cameras.main.scrollX -= (pointer.x - pointer.prevPosition.x) / this.cameras.main.zoom;
-                this.cameras.main.scrollY -= (pointer.y - pointer.prevPosition.y) / this.cameras.main.zoom;
-
-                if (Phaser.Math.Distance.Between(pointer.x, pointer.y, this.dragStartX, this.dragStartY) > 5) {
-                    this.isDraggingMap = true;
-                }
-            }
-        });
-
-        // Zoom avec la molette
-        this.input.on('wheel', (pointer: Phaser.Input.Pointer, gameObjects: Phaser.GameObjects.GameObject[], deltaX: number, deltaY: number) => {
-            if (deltaY > 0) {
-                this.cameras.main.zoom = Math.max(
-                    GameConfig.CAMERA.minZoom,
-                    this.cameras.main.zoom - GameConfig.CAMERA.zoomSpeed
-                );
-            } else {
-                this.cameras.main.zoom = Math.min(
-                    GameConfig.CAMERA.maxZoom,
-                    this.cameras.main.zoom + GameConfig.CAMERA.zoomSpeed
-                );
-            }
-        });
-
-        // Clic sur la carte
-        this.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-            if (this.ignoreNextMapClick) {
-                this.ignoreNextMapClick = false;
-                return;
-            }
-            if (!this.isDraggingMap) {
-                this.handleClick(pointer);
-            }
-            this.isDraggingMap = false;
-        });
-    }
-
-    /**
-     * Gère le clic sur la carte
-     */
-    private handleClick(pointer: Phaser.Input.Pointer): void {
-        const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-        const target = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
-        const gridData = this.mapManager.gridData;
-
-        if (!this.isValidTile(target.x, target.y)) return;
-
-        // --- SECTION : PLACEMENT D'OBJET ---
-        if (this.playerStore.placementMode && this.playerStore.placingItemName) {
-            // Vérification si la case est libre
-            const isOccupied = this.objectManager.hasObject(target.x, target.y) ||
-                gridData[target.y]?.[target.x] !== 0; // 0 = vide/herbe
-
-            if (!isOccupied) {
-                this.handlePlacement(target.x, target.y);
-            } else {
-                this.playerStore.lastActionFeedback = "Impossible de placer ici !#" + Date.now();
-            }
-            return; // On arrête là pour ne pas bouger
-        }
-
-        // --- SECTION : MOUVEMENT STANDARD ---
-
-        const playerPos = this.player.getGridPosition();
-        const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, target.x, target.y);
-
-        // Interaction avec l'eau (Récolte)
-        // ID 2 correspond à l'eau dans MapManager
-        if (gridData[target.y]?.[target.x] === 2) {
-            if (dist < 2) {
-                this.playerStore.addItem('Flasque d\'eau');
-                const isoPos = IsoMath.gridToIso(target.x, target.y, this.mapOriginX, this.mapOriginY);
-                this.showFloatingText(isoPos.x, isoPos.y - 50, "+1 Flasque d'eau", "#06b6d4"); // Cyan
-            } else {
-                // Feedback: Trop loin
-            }
-            return;
-        }
-
-        // Récolte Objet
-        if (gridData[target.y]?.[target.x] === 1) {
-            this.handleHarvestIntent(target.x, target.y);
-            return;
-        }
-
-        this.startMove(target.x, target.y, null);
     }
 
     /**
@@ -855,21 +785,30 @@ export default class MainScene extends Scene {
 
         this.pathfindingManager.findPath(playerPos.x, playerPos.y, x, y, (path) => {
             if (path && path.length > 0) {
-                // Calcul du coût en énergie pour le trajet total
-                // On exclut la première tuile (position actuelle)
-                const pathCost = path.length - 1;
-
-                if (this.playerStore.stats.energy < pathCost) {
-                    // TODO: Feedback UI "Pas assez d'énergie"
-
-                    // On peut imaginer d'annuler tout le mouvement, ou de bouger jusqu'à épuisement.
-                    // Pour l'exercice : on empêche le départ.
-                    return;
-                }
+                // On n'empêche plus le mouvement si énergie vide, on ralentit juste (voir moveNextStep)
 
                 path.shift(); // Retirer la position actuelle
                 this.currentPath = path;
                 this.isMoving = true;
+
+                // Broadcast du mouvement initial (Destination finale ou prochaine étape ?)
+                // Pour une synchro simple, on envoie la destination finale souhaitée
+                // Mais ici on bouge case par case. Envoyer chaque pas ou la destination ?
+                // Envoyer la destination finale (x,y) permet aux autres clients de pathfind.
+                // Envoyer le prochain pas est plus simple mais plus coûteux en réseau.
+                // Pour cette session : on envoie la destination finale du clic (x,y arguments de startMove).
+
+                // Note: startMove recoit x,y qui sont des coordonnées GRILLE.
+                // Le serveur attend des coordonnées. Idéalement Iso pour l'affichage direct par les autres.
+                // ObjectManager.moveRemotePlayer attend des coordonnées écran (Iso).
+
+                const targetIso = IsoMath.gridToIso(x, y, this.mapOriginX, this.mapOriginY);
+                // On utilise le store qui est déjà importé mais pas assigné à une propriété de classe
+                // On va devoir le récupérer via useNetworkStore() car pas stocké dans 'this'
+                // Ou mieux, on l'ajoute aux propriétés de la classe.
+                const networkStore = useNetworkStore();
+                networkStore.sendMove(targetIso.x, targetIso.y);
+
                 this.moveNextStep();
             } else {
                 if (playerPos.x === x && playerPos.y === y && this.pendingAction) {
@@ -899,6 +838,25 @@ export default class MainScene extends Scene {
 
         this.playerStore.move(nextTile.x, nextTile.y);
 
+        // Gestion de l'énergie et de la fatigue
+        const currentEnergy = this.playerStore.stats.energy;
+        const isExhausted = currentEnergy <= 0;
+
+        // Calcul de la vitesse : Plus lent si épuisé (x2 duration = 0.5 speed)
+        // Normal : 250ms, Épuisé : 500ms
+        const stepDuration = isExhausted
+            ? GameConfig.MOVEMENT.stepDuration * 2
+            : GameConfig.MOVEMENT.stepDuration;
+
+        // Feedback visuel temporaire si épuisé (Teinte bleutée "Fatigue")
+        if (isExhausted) {
+            this.player.setTint(0x88ccff);
+        } else {
+            // On laisse l'update loop gérer la teinte Jour/Nuit, 
+            // mais on force un petit reset ici par sécurité ou on laisse le tint manager global
+            // Pour l'instant on ne force pas le reset blanc pour ne pas casser l'ambiance nuit
+        }
+
         // Consommation d'énergie par pas
         this.playerStore.consumeEnergy(1);
 
@@ -909,7 +867,8 @@ export default class MainScene extends Scene {
             nextTile.y,
             this.mapOriginX,
             this.mapOriginY,
-            () => this.moveNextStep()
+            () => this.moveNextStep(),
+            stepDuration
         );
     }
 
@@ -996,5 +955,82 @@ export default class MainScene extends Scene {
         }
 
         this.playerStore.updateNearbyStations(stations);
+    }
+
+
+    /**
+     * Gère la chaleur du feu de camp
+     */
+    private handleCampfireWarmth(): void {
+        const playerPos = this.player.getGridPosition();
+        let nearFire = false;
+
+        this.objectManager.getObjectMap().forEach(obj => {
+            if (obj.getData('type') === 'campfire' || obj.getData('type') === 'camp') {
+                const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, obj.getData('gridX'), obj.getData('gridY'));
+                if (dist <= 3) {
+                    nearFire = true;
+                }
+            }
+        });
+
+        if (nearFire) {
+            // Regen mild energy if near fire
+            if (this.playerStore.stats.energy < this.playerStore.stats.maxEnergy) {
+                this.playerStore.updateStats({ energy: this.playerStore.stats.energy + 0.2 });
+            }
+        }
+    }
+
+    /**
+     * Met à jour le fantôme de placement
+     */
+    private updatePlacementGhost(): void {
+        if (!this.playerStore.placementMode || !this.playerStore.placingItemName) {
+            if (this.placementGhost) {
+                this.placementGhost.destroy();
+                this.placementGhost = null;
+            }
+            return;
+        }
+
+        const pointer = this.input.activePointer;
+        const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+        const gridPos = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
+
+        if (!this.isValidTile(gridPos.x, gridPos.y)) {
+            if (this.placementGhost) this.placementGhost.setVisible(false);
+            return;
+        }
+
+        if (!this.placementGhost) {
+            this.placementGhost = this.add.image(0, 0, 'rock');
+            this.placementGhost.setAlpha(0.6);
+        }
+
+        const itemType = this.playerStore.placingItemName;
+        let texture = 'rock';
+        if (itemType === 'Kit de Feu de Camp') texture = 'rock'; // Fallback for campfire kit
+        else if (itemType === 'furnace') texture = 'furnace';
+        else if (itemType === 'clay_pot') texture = 'clay_pot';
+
+        if (this.placementGhost.texture.key !== texture) {
+            this.placementGhost.setTexture(texture);
+        }
+
+        const isoPos = IsoMath.gridToIso(gridPos.x, gridPos.y, this.mapOriginX, this.mapOriginY);
+        const config = RENDER_OFFSETS[texture] || RENDER_OFFSETS['default']!;
+
+        this.placementGhost.setPosition(isoPos.x, isoPos.y + config.offsetY);
+        this.placementGhost.setOrigin(config.originX, config.originY);
+        this.placementGhost.setVisible(true);
+
+        const isOccupied = this.objectManager.hasObject(gridPos.x, gridPos.y) ||
+            this.mapManager.gridData[gridPos.y]?.[gridPos.x] !== 0;
+
+        this.placementGhost.setTint(isOccupied ? 0xff4444 : 0x44ff44);
+
+        // Depth using new formula
+        this.placementGhost.setDepth(isoPos.y + (this.placementGhost.height * 0.5) + (isoPos.x * 0.001) + 100);
     }
 }

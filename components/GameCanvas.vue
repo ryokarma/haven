@@ -6,7 +6,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted } from 'vue';
 import Phaser from 'phaser';
-import MainScene from '@/game/scenes/MainScene';
+import { MainScene } from '@/game/scenes/MainScene';
 
 import { usePlayerStore } from '@/stores/player';
 import { IsoMath } from '@/game/utils/IsoMath';
