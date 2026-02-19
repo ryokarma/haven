@@ -2,7 +2,7 @@ import { Scene } from 'phaser';
 import { usePlayerStore } from '@/stores/player';
 import { useNetworkStore } from '@/stores/network';
 import { getItemData, type ToolType } from '@/game/config/ItemRegistry';
-import { useWorldStore } from '@/stores/world';
+import { useBuildStore } from '@/stores/build';
 import { IsoMath } from '@/game/utils/IsoMath';
 import { GameConfig } from '@/game/config/GameConfig';
 import { TextureGenerator } from '@/game/graphics/TextureGenerator';
@@ -20,6 +20,7 @@ export class MainScene extends Scene {
     // Stores
     private playerStore!: ReturnType<typeof usePlayerStore>;
     private worldStore!: ReturnType<typeof useWorldStore>;
+    private buildStore!: ReturnType<typeof useBuildStore>;
 
     // Config
     private mapOriginX!: number;
@@ -39,6 +40,8 @@ export class MainScene extends Scene {
     private player!: Player;
     private houseRoof?: Phaser.GameObjects.Image;
     private placementGhost: Phaser.GameObjects.Image | null = null;
+    private lastGhostIsoX: number = 0;
+    private lastGhostIsoY: number = 0;
 
     // State
     private survivalTimer?: Phaser.Time.TimerEvent;
@@ -68,6 +71,7 @@ export class MainScene extends Scene {
     create() {
         this.playerStore = usePlayerStore();
         this.worldStore = useWorldStore();
+        this.buildStore = useBuildStore();
 
         // Réinitialiser le mode placement au démarrage par sécurité
         this.playerStore.setPlacementMode(false);
@@ -233,6 +237,7 @@ export class MainScene extends Scene {
         // --- MULTIJOUEUR ---
         const networkStore = useNetworkStore();
         networkStore.listenForWalletUpdates(); // Start listening for economy
+        networkStore.listenForErrors(); // Start listening for server errors
 
         // Abonnement aux messages
         networkStore.onMessage((msg: any) => {
@@ -283,6 +288,72 @@ export class MainScene extends Scene {
                     this.cameras.main.centerOn(userData.x, userData.y);
                 }
             }
+        });
+
+        // SYSTEME DE FEEDBACK (Chat & Economie)
+
+        // 1. Chat Bubbles
+        const chatStore = (window as any).pinia.state.value.chat; // Hack si besoin ou via store direct
+        // Mieux : écouter le store via subscribe ou watch
+        // Comme on est dans Phaser (hors Vue setup), on utilise l'abonnement Pinia
+
+        // Ecoute directe via NetworkStore (plus simple car on a déjà le message ici)
+        networkStore.onMessage((msg: any) => {
+            if (msg.type === 'CHAT_MESSAGE') {
+                // Trouver le sprite cible
+                let targetSprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Container | Phaser.GameObjects.Image | undefined;
+
+                // C'est moi ?
+                const myId = localStorage.getItem('haven_player_id');
+                if (msg.sender === myId) {
+                    targetSprite = this.player.getSprite();
+                } else {
+                    targetSprite = this.objectManager.remotePlayers.get(msg.sender);
+                }
+
+                if (targetSprite) {
+                    this.objectManager.createChatBubbleOnSprite(targetSprite, msg.text);
+                }
+            }
+
+            // 2. Resource Feedback
+            if (msg.type === 'WALLET_UPDATE') {
+                // On compare avec l'ancien state ? 
+                // Le payload contient le nouveau wallet complet : { wood: 10, stone: 5 }
+                // On doit savoir ce qui a changé.
+                // On utilise le store player pour avoir l'état précédent (il n'est pas encore mis à jour quand on reçoit le msg ici ?)
+                // ATTENTION : networkStore met à jour playerStore AVANT d'appeler ce callback 
+                // car listenForWalletUpdates est enregistré avant.
+                // Donc playerStore a DEJA la nouvelle valeur.
+                // Il nous faut la valeur précédente. 
+                // Solution : Modifier PlayerStore pour émettre un 'diff' ou gérer ici en comparant avec une copie locale.
+            }
+        });
+
+        // Solution propre pour Economy Feedback : Subscribe to PlayerStore changes
+        this.playerStore.$subscribe((mutation, state) => {
+            // On ne peut pas facilement avoir le "oldValue" avec $subscribe standard sur tout le state
+            // Mais on peut faire un watch manuel si on était dans Vue.
+            // Ici, on va utiliser une astuce : l'action `updateEconomyInventory` dans le store va être modifiée 
+            // pour retourner la différence, et on l'utilise si on l'appelle nous-même... 
+            // MAIS c'est le NetworkStore qui l'appelle.
+
+            // Alternative : On intercepte le message WALLET_UPDATE dans NetworkStore avant update ?
+            // NON. 
+            // On va simplement patcher le `updateEconomyInventory` du store player pour qu'il dispatch un event custom sur window/scene ?
+            // Ou plus simple : Dans MainScene, on écoute 'WALLET_UPDATE' dans le bloc ci-dessus, et on fait le diff MANUELLEMENT
+            // en comparant `msg.payload` (nouveau) avec `this.playerStore.economyInventory` (qui est encore l'ancien SI le networkStore callback est après ?)
+            // VERIFIONS L'ORDRE :
+            // MainScene : networkStore.listenForWalletUpdates() (Enregistre Callback A)
+            // MainScene : networkStore.onMessage(...) (Enregistre Callback B)
+            // NetworkStore exécute callbacks dans l'ordre. Donc A (Update Store) se lance AVANT B.
+            // Donc dans B, le store est déjà à jour.
+
+            // CORRECTION : On va inverser ou enregistrer notre listener B AVANT A ?
+            // Difficile à garantir.
+
+            // MEILLEURE SOLUTION : Modifier `playerStore.updateEconomyInventory` pour accepter un Callback de feedback
+            // Ou ajouter un champ `lastDiff` dans le store.
         });
 
         // Cleanup on shutdown
@@ -384,26 +455,21 @@ export class MainScene extends Scene {
         // Clic Droit : Interaction (Récolte, Utilisation)
         this.inputManager.events.on('tile-interact', (event: any) => {
             const { x, y } = event;
-            // Pour l'instant, on envoie l'interaction au serveur pour le toggle ressource
-            // (Session 4.2 Interaction Serveur)
-            // On commente les handlers locaux précédents qui étaient purement clients ?
-            // Ou on garde les deux ? Le user demande "Connecte InputManager.onRightClick -> networkStore.sendInteract"
-
-            // On va supposer que le clic droit sert now à TESTER l'interaction serveur.
-            // On garde handleInteraction si c'est pour l'usage outils (inventory), mais le prompt veut modifier le monde via serveur.
-
             const networkStore = useNetworkStore();
-            networkStore.sendInteract(x, y);
 
-            // On garde quand même le handler local pour le feedback immédiat ou autres features existantes (Harvest) ?
-            // Le prompt dit : "Permettre au joueur de modifier l'état du monde... via le serveur."
-            // "Le serveur est maître : le client ne pose rien tant qu'il n'a pas reçu le RESOURCE_PLACED"
-            // Donc on ne doit PAS appeler handleInteraction (local) qui fait removeObject directement !
-            // MAIS handleInteraction gérait aussi l'inventaire, les outils, etc. 
-            // Pour cette session, on priorise le test serveur. On commente l'ancien handler temporairement 
-            // ou on le déplace sur une autre touche.
-
-            // this.handleInteraction(x, y);
+            if (this.buildStore.selectedItemId === 'cursor') {
+                // Mode curseur : On récolte / interagit (Suppression server-side)
+                networkStore.sendInteract(x, y);
+            } else {
+                // Mode construction : On construit
+                // On vérifie d'abord si la case est libre localement (Feedback immédiat)
+                if (this.mapManager.isTileOccupied(x, y)) {
+                    // Feedback visuel déjà géré par le Ghost (Rouge)
+                    // On peut ajouter un son ou un message d'erreur ici si nécessaire
+                    return;
+                }
+                networkStore.sendBuild(x, y, this.buildStore.selectedItemId);
+            }
         });
     }
 
@@ -985,52 +1051,51 @@ export class MainScene extends Scene {
     /**
      * Met à jour le fantôme de placement
      */
-    private updatePlacementGhost(): void {
-        if (!this.playerStore.placementMode || !this.playerStore.placingItemName) {
+    private updatePlacementGhost() {
+        if (!this.buildStore) return;
+
+        const selectedId = this.buildStore.selectedItemId;
+
+        // Si curseur ou rien, on cache
+        if (selectedId === 'cursor' || !selectedId) {
             if (this.placementGhost) {
-                this.placementGhost.destroy();
-                this.placementGhost = null;
+                this.placementGhost.setVisible(false);
             }
             return;
         }
 
-        const pointer = this.input.activePointer;
-        const worldPoint = pointer.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-        const gridPos = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
-
-        if (!this.isValidTile(gridPos.x, gridPos.y)) {
-            if (this.placementGhost) this.placementGhost.setVisible(false);
-            return;
-        }
-
+        // On crée le ghost s'il n'existe pas
         if (!this.placementGhost) {
-            this.placementGhost = this.add.image(0, 0, 'rock');
+            this.placementGhost = this.add.image(0, 0, selectedId);
             this.placementGhost.setAlpha(0.6);
+            this.placementGhost.setDepth(999999);
         }
 
-        const itemType = this.playerStore.placingItemName;
-        let texture = 'rock';
-        if (itemType === 'Kit de Feu de Camp') texture = 'rock'; // Fallback for campfire kit
-        else if (itemType === 'furnace') texture = 'furnace';
-        else if (itemType === 'clay_pot') texture = 'clay_pot';
-
-        if (this.placementGhost.texture.key !== texture) {
-            this.placementGhost.setTexture(texture);
+        // On met à jour la texture si elle a changé
+        if (this.placementGhost.texture.key !== selectedId) {
+            this.placementGhost.setTexture(selectedId);
         }
 
-        const isoPos = IsoMath.gridToIso(gridPos.x, gridPos.y, this.mapOriginX, this.mapOriginY);
-        const config = RENDER_OFFSETS[texture] || RENDER_OFFSETS['default']!;
-
-        this.placementGhost.setPosition(isoPos.x, isoPos.y + config.offsetY);
-        this.placementGhost.setOrigin(config.originX, config.originY);
         this.placementGhost.setVisible(true);
 
-        const isOccupied = this.objectManager.hasObject(gridPos.x, gridPos.y) ||
-            this.mapManager.gridData[gridPos.y]?.[gridPos.x] !== 0;
+        const pointer = this.input.activePointer;
+        const worldPoint = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+        // Conversion précise Iso -> Grid
+        const gridPos = IsoMath.isoToGrid(worldPoint.x, worldPoint.y, this.mapOriginX, this.mapOriginY);
+        const gx = Math.round(gridPos.x);
+        const gy = Math.round(gridPos.y);
 
-        this.placementGhost.setTint(isOccupied ? 0xff4444 : 0x44ff44);
+        const isoPos = IsoMath.gridToIso(gx, gy, this.mapOriginX, this.mapOriginY);
 
-        // Depth using new formula
-        this.placementGhost.setDepth(isoPos.y + (this.placementGhost.height * 0.5) + (isoPos.x * 0.001) + 100);
+        this.placementGhost.setPosition(isoPos.x, isoPos.y);
+
+        // Validation Collision
+        if (this.mapManager.isTileOccupied(gx, gy)) {
+            // Rouge si occupé
+            this.placementGhost.setTint(0xff0000);
+        } else {
+            // Normal sinon
+            this.placementGhost.clearTint();
+        }
     }
 }

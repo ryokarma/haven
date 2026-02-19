@@ -194,26 +194,7 @@ const handleItemClick = (itemName: string) => {
         @close="isCharacterOpen = false" 
     />
 
-    <div class="flex w-full items-end justify-between gap-4">
-      
-      <div class="pointer-events-auto flex w-80 flex-col gap-2 rounded-2xl border border-white/10 bg-slate-900/60 p-4 backdrop-blur-xl shadow-lg transition-colors hover:bg-slate-900/70">
-        <div class="flex h-32 flex-col justify-end overflow-y-auto pr-1 text-sm scrollbar-thin">
-          <div v-for="(msg, index) in messages" :key="index" class="mb-1 animate-slide-in">
-            <span class="font-bold text-amber-400 drop-shadow-sm">{{ msg.author }}:</span>
-            <span class="ml-2 text-slate-200 shadow-black">{{ msg.text }}</span>
-          </div>
-        </div>
-        <form @submit.prevent="sendMessage" class="relative flex items-center">
-          <input 
-            v-model="newMessage" 
-            type="text" 
-            placeholder="Écrire..." 
-            class="w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-amber-400/50 focus:bg-black/40 transition-all" 
-          />
-        </form>
-      </div>
-
-      <div class="pointer-events-auto flex items-center gap-3">
+    <div class="absolute bottom-4 right-4 pointer-events-auto flex items-center gap-3">
           <!-- Bouton Crafting -->
           <button 
             @click="isCraftingOpen = !isCraftingOpen" 

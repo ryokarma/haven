@@ -1,18 +1,35 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
+import { usePlayerStore } from './player';
+import { useChatStore } from './chat';
 
+/**
+ * Network Store — Gère la connexion WebSocket et le dispatch des messages
+ * 
+ * PROTOCOLE :
+ * - Client → Serveur : { type: string, payload: { ... } }
+ * - Serveur → Client : { type: string, ...data }
+ * 
+ * MESSAGES REÇUS :
+ * - CURRENT_PLAYERS, PLAYER_JOINED, PLAYER_LEFT
+ * - PLAYER_MOVED
+ * - PLAYER_SYNC, WORLD_STATE
+ * - WALLET_UPDATE
+ * - RESOURCE_PLACED, RESOURCE_REMOVED
+ * - CHAT_MESSAGE
+ * - ERROR
+ */
 export const useNetworkStore = defineStore('network', () => {
     // --- State ---
     const isConnected = ref(false);
-    // Utilisation de shallowRef pour le WebSocket car c'est un objet complexe non-reactif
     const socket = shallowRef<WebSocket | null>(null);
     const error = ref<string | null>(null);
     const lastPing = ref(0);
 
-    // Liste des callbacks pour la gestion des messages
+    // Callbacks pour la gestion des messages
     const onMessageCallbacks = ref<Array<(msg: any) => void>>([]);
 
-    // --- Actions ---
+    // --- Listeners ---
 
     /**
      * Enregistre un callback pour traiter les messages reçus
@@ -33,30 +50,23 @@ export const useNetworkStore = defineStore('network', () => {
             onMessageCallbacks.value.forEach(cb => cb(parsed));
         } catch (e) {
             // Ignore les erreurs de parsing (ex: ping simple string)
-            // console.error('[Network] Erreur de parsing message:', e);
         }
     }
 
-    /**
-     * Nettoie la connexion
-     */
+    // --- Connexion ---
+
     function cleanup() {
         isConnected.value = false;
         if (socket.value) {
-            // Retire les listeners pour éviter les effets de bord
             socket.value.onopen = null;
             socket.value.onmessage = null;
             socket.value.onclose = null;
             socket.value.onerror = null;
-
             socket.value.close();
             socket.value = null;
         }
     }
 
-    /**
-     * Connecte le joueur au WebSocket
-     */
     function connect(playerId: string) {
         if (socket.value) {
             console.warn('[Network] Déjà connecté ou connexion en cours.');
@@ -64,13 +74,13 @@ export const useNetworkStore = defineStore('network', () => {
         }
 
         const url = `ws://localhost:8000/ws/${playerId}`;
-        console.log(`[Network] Tentative de connexion à ${url}...`);
+        console.log(`[Network] Connexion à ${url}...`);
 
         try {
             const ws = new WebSocket(url);
 
-            ws.onopen = (event) => {
-                console.log('[Network] Connecté au serveur !');
+            ws.onopen = () => {
+                console.log('[Network] Connecté !');
                 isConnected.value = true;
                 error.value = null;
                 lastPing.value = Date.now();
@@ -83,9 +93,6 @@ export const useNetworkStore = defineStore('network', () => {
             ws.onclose = (event) => {
                 console.log('[Network] Déconnecté.', event.reason);
                 cleanup();
-
-                // Tentative de reconnexion auto dans 3s
-                // On utilise un timeout simple
                 setTimeout(() => {
                     console.log('[Network] Tentative de reconnexion...');
                     connect(playerId);
@@ -94,43 +101,48 @@ export const useNetworkStore = defineStore('network', () => {
 
             ws.onerror = (err) => {
                 console.error('[Network] Erreur WebSocket:', err);
-                // On ne stocke pas l'objet erreur complet pour éviter les soucis de réactivité
             };
 
             socket.value = ws;
 
         } catch (e) {
-            console.error('[Network] Exception lors de la création du WebSocket:', e);
+            console.error('[Network] Exception:', e);
             error.value = "Erreur de création WebSocket";
             cleanup();
         }
     }
 
-    /**
-     * Envoie un message générique
-     */
-    function send(type: string, payload: any) {
-        if (!socket.value || !isConnected.value) {
-            console.warn('[Network] Impossible d\'envoyer le message : non connecté.', type);
-            return;
-        }
-        const message = JSON.stringify({ type, payload });
-        socket.value.send(message);
+    function disconnect() {
+        cleanup();
     }
 
+    // --- Envoi ---
+
     /**
-     * Envoie un mouvement joueur
+     * Envoie un message au serveur.
+     * Format : { type, payload }
      */
+    function send(type: string, payload: any = {}) {
+        if (!socket.value || !isConnected.value) {
+            console.warn('[Network] Non connecté, message ignoré:', type);
+            return;
+        }
+        socket.value.send(JSON.stringify({ type, payload }));
+    }
+
     function sendMove(x: number, y: number) {
         send('PLAYER_MOVE', { x, y });
     }
 
-    /**
-     * Envoie une interaction joueur
-     */
     function sendInteract(x: number, y: number) {
         send('PLAYER_INTERACT', { x, y });
     }
+
+    function sendBuild(x: number, y: number, itemId: string) {
+        send('PLAYER_BUILD', { x, y, itemId });
+    }
+
+    // --- Listeners Auto ---
 
     function listenForWalletUpdates() {
         const playerStore = usePlayerStore();
@@ -138,18 +150,33 @@ export const useNetworkStore = defineStore('network', () => {
             if (msg.type === 'WALLET_UPDATE') {
                 playerStore.updateEconomyInventory(msg.payload);
             } else if (msg.type === 'PLAYER_SYNC') {
-                if (msg.payload.wallet) {
+                if (msg.payload?.wallet) {
                     playerStore.updateEconomyInventory(msg.payload.wallet);
                 }
             }
         });
     }
 
-    /**
-     * Déconnecte manuellement
-     */
-    function disconnect() {
-        cleanup();
+    function listenForChatMessages() {
+        const chatStore = useChatStore();
+        onMessage((msg: any) => {
+            if (msg.type === 'CHAT_MESSAGE') {
+                chatStore.addMessage(msg);
+            }
+        });
+    }
+
+    function listenForErrors() {
+        onMessage((msg: any) => {
+            if (msg.type === 'ERROR') {
+                console.warn('[Server Error]', msg.message);
+                error.value = msg.message || 'Erreur serveur';
+                // Auto-clear après 3s
+                setTimeout(() => {
+                    error.value = null;
+                }, 3000);
+            }
+        });
     }
 
     return {
@@ -166,6 +193,10 @@ export const useNetworkStore = defineStore('network', () => {
         send,
         sendMove,
         sendInteract,
+        sendBuild,
+        listenForWalletUpdates,
+        listenForChatMessages,
+        listenForErrors,
         onMessage
     };
 });

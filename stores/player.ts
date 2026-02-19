@@ -41,6 +41,7 @@ export interface PlayerState {
     recipes: Recipe[];
     placementMode: boolean;
     placingItemName: string | null;
+    lastEconomyDiff: { resource: string, amount: number, id: number } | null;
     equipment: {
         head: InventoryItem | null;
         body: InventoryItem | null;
@@ -142,6 +143,7 @@ export const usePlayerStore = defineStore('player', {
         ],
         placementMode: false,
         placingItemName: null,
+        lastEconomyDiff: null,
         equipment: {
             head: null,
             body: null,
@@ -176,8 +178,17 @@ export const usePlayerStore = defineStore('player', {
                 this.lastActionFeedback = `Mode placement : ${itemName}#${Date.now()}`;
             }
         },
-
         updateEconomyInventory(newInventory: Record<string, number>) {
+            // Calcul du diff pour feedback
+            for (const key in newInventory) {
+                const oldVal = this.economyInventory[key] || 0;
+                const newVal = newInventory[key];
+                if (newVal !== undefined && newVal !== oldVal) {
+                    this.lastEconomyDiff = { resource: key, amount: newVal - oldVal, id: Date.now() };
+                    // On ne supporte qu'un changement à la fois pour le feedback visuel propre pour l'instant
+                    // Si plusieurs changent, le dernier gagne (suffisant pour +1 Wood ou -1 Stone)
+                }
+            }
             this.economyInventory = newInventory;
         },
 

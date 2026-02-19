@@ -16,6 +16,7 @@ export class MapManager {
     private mapOriginX: number;
     private mapOriginY: number;
     private rnd: Phaser.Math.RandomDataGenerator;
+    private occupiedTiles: Set<string> = new Set();
 
     constructor(
         scene: Scene,
@@ -206,30 +207,50 @@ export class MapManager {
         // Pour l'instant on suppose que c'est une init initiale.
 
         resources.forEach(res => {
-            // Les coordonnées serveur sont en GRID
-            // placeObject attend (gridX, gridY, type, mapOrigins...)
-            this.objectManager.placeObject(res.x, res.y, res.type, this.mapOriginX, this.mapOriginY, false, res.id);
+            // Le sprite utilise 'asset' (ex: "tree"), pas 'type' (ex: "obstacle")
+            const spriteKey = res.asset || res.type;
+            this.objectManager.placeObject(res.x, res.y, spriteKey, this.mapOriginX, this.mapOriginY, false, res.id);
 
             // On met à jour la grille locale pour le pathfinding / collisions
-            // 1 = Obstacle
-            this.updateCell(res.x, res.y, 1);
+            // 1 = Obstacle, 0 = Traversable (Sols)
+            const isFloor = res.type === 'floor' || spriteKey.includes('path');
+            this.updateCell(res.x, res.y, isFloor ? 0 : 1);
+
+            this.occupiedTiles.add(`${res.x},${res.y}`);
         });
     }
 
     /**
+     * Vérifie si une tuile est occupée par une ressource
+     */
+    public isTileOccupied(x: number, y: number): boolean {
+        return this.occupiedTiles.has(`${x},${y}`) || this.isInsideHouse(x, y);
+    }
+
+    /**
      * Ajoute une ressource (venant du serveur)
+     * resource = { id, type: "obstacle"|"floor", asset: "tree"|"rock"|"path_stone", x, y }
      */
     public addResource(resource: any): void {
+        // Le sprite utilise 'asset' (ex: "tree"), pas 'type' (ex: "obstacle")
+        const spriteKey = resource.asset || resource.type;
+
         this.objectManager.placeObject(
             resource.x,
             resource.y,
-            resource.type,
+            spriteKey,
             this.mapOriginX,
             this.mapOriginY,
             false,
             resource.id
         );
-        this.updateCell(resource.x, resource.y, 1);
+
+        // Gestion Walkability : floor = traversable (0), obstacle = bloquant (1)
+        const isFloor = resource.type === 'floor' || spriteKey.includes('path');
+        this.updateCell(resource.x, resource.y, isFloor ? 0 : 1);
+
+        // Toujours ajouter aux occupiedTiles pour empêcher de reconstruire par dessus
+        this.occupiedTiles.add(`${resource.x},${resource.y}`);
     }
 
     /**
@@ -240,6 +261,7 @@ export class MapManager {
             // Suppression rapide par coord
             this.objectManager.removeObject(x, y);
             this.updateCell(x, y, 0);
+            this.occupiedTiles.delete(`${x},${y}`);
         } else {
             // Fallback par ID
             // Note: updateCell sera plus dur sans x,y si ObjectManager ne retourne pas l'obj détruit

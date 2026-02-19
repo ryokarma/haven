@@ -10,6 +10,8 @@
       <GameCanvas />
 
       <GameUI />
+      <BuildToolbar />
+      <ChatWidget />
       
       <template #fallback>
         <div class="w-[800px] h-[600px] bg-stone-800 rounded-xl flex items-center justify-center text-stone-500">

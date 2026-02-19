@@ -19,6 +19,7 @@ export const RENDER_OFFSETS: Record<string, { originX: number; originY: number; 
     'clay_pot_ready': { originX: 0.5, originY: 0.9, offsetY: 0 },
     'furnace': { originX: 0.5, originY: 0.8, offsetY: 0 },
     'watering_can': { originX: 0.5, originY: 0.8, offsetY: 0 },
+    'path_stone': { originX: 0.5, originY: 0.5, offsetY: 0 }, // Sol plat
 };
 
 /**
@@ -84,7 +85,19 @@ export class ObjectManager {
         // La profondeur est calculée pour un tri correct (Z-Sorting)
         // Formule : pos.y + (height * 0.5) + (x * 0.001)
         // Ajout d'un léger offset static si nécessaire (ici géré par height*0.5)
-        obj.setDepth(pos.y + (obj.height * 0.5) + (pos.x * 0.001));
+
+        // CUSTOM LAYER LOGIC
+        const isFloor = type.includes('path') || type.includes('floor');
+        if (isFloor) {
+            // Sol : Z = 0 (ou très bas pour être juste au dessus des tuiles de base)
+            // Les Tuiles de base sont rendue par TileManager, souvent depth 0 ou moins ?
+            // On met -1 pour être sûr ? Non, TileManager met depth auto ? non TileManager utilise containers ou images.
+            // On va dire Depth 10. Les obstacles seront > y (qui est souvent > 0).
+            obj.setDepth(1);
+        } else {
+            // Obstacle / Objet Vertical
+            obj.setDepth(pos.y + (obj.height * 0.5) + (pos.x * 0.001));
+        }
 
         obj.setInteractive({ cursor: 'pointer' });
         obj.setData('gridX', x);
@@ -282,5 +295,132 @@ export class ObjectManager {
 
             // TODO: Jouer animation de marche si disponible
         }
+    }
+    /**
+     * Affiche un texte flottant (ex: +1 Wood)
+     */
+    showFloatingText(x: number, y: number, message: string, color: string): void {
+        const text = this.scene.add.text(x, y, message, {
+            fontFamily: 'Arial',
+            fontSize: '16px',
+            fontStyle: 'bold',
+            color: color,
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        text.setOrigin(0.5, 0.5);
+        text.setDepth(999999); // Toujours au-dessus
+
+        this.scene.tweens.add({
+            targets: text,
+            y: y - 50,
+            alpha: 0,
+            duration: 1500,
+            ease: 'Power1',
+            onComplete: () => {
+                text.destroy();
+            }
+        });
+    }
+
+    /**
+     * Affiche une bulle de chat au-dessus d'un joueur
+     */
+    showChatBubble(playerId: string, message: string): void {
+        // Trouver le sprite (Local ou Remote)
+        // TODO: Gérer le joueur local si playerId === monId
+        // Pour l'instant on cherche dans remotePlayers ou on passe le sprite en argument ?
+        // Simplification: On cherche dans remotePlayers. Si pas trouvé, c'est peut-être le local player.
+
+        let targetSprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Container | Phaser.GameObjects.Image | undefined = this.remotePlayers.get(playerId);
+
+        // Hack: Si c'est le joueur local, on doit le récupérer via la Scene mais ObjectManager n'a pas accès direct à "player" entity.
+        // Solution: On expose une méthode ou on passe la target.
+        // Mais pour faire simple : La MainScene appellera showChatBubbleWithTarget(sprite, msg)
+        // Ou on stocke référence au local player dans ObjectManager ?
+        // On va faire une méthode "getParamsForPlayer(id)"
+
+    }
+
+    /**
+     * Méthode interne pour créer la bulle sur une cible
+     */
+    createChatBubbleOnSprite(sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Container | Phaser.GameObjects.Image, message: string): void {
+        // Nettoyage ancienne bulle si existe
+        const oldBubble = sprite.getData('chatBubble');
+        if (oldBubble) {
+            oldBubble.destroy();
+        }
+
+        const container = this.scene.add.container(sprite.x, sprite.y - 60);
+        container.setDepth(999999);
+
+        // Texte pour mesurer
+        const text = this.scene.add.text(0, 0, message, {
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            color: '#000000',
+            align: 'center',
+            wordWrap: { width: 150 }
+        });
+        text.setOrigin(0.5, 0.5);
+
+        const w = text.width + 20;
+        const h = text.height + 14;
+
+        // Fond (Graphique)
+        const bg = this.scene.add.graphics();
+        bg.fillStyle(0xffffff, 1);
+        bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+        // Petite flèche bas
+        bg.fillTriangle(-5, h / 2, 5, h / 2, 0, h / 2 + 5);
+
+        container.add([bg, text]);
+
+        // Sauvegarde référence
+        sprite.setData('chatBubble', container);
+
+        // Animation Pop In
+        container.setScale(0);
+        this.scene.tweens.add({
+            targets: container,
+            scale: { from: 0, to: 1 },
+            duration: 200,
+            ease: 'Back.out'
+        });
+
+        // Auto destroy
+        this.scene.time.delayedCall(4000, () => {
+            this.scene.tweens.add({
+                targets: container,
+                alpha: 0,
+                duration: 500,
+                onComplete: () => {
+                    container.destroy();
+                    sprite.setData('chatBubble', null); // Clean ref
+                }
+            });
+        });
+
+        // Update position in update loop? 
+        // Si le sprite bouge, le container ne suit pas automatiquement.
+        // On attache un update listener ou on le met enfant du sprite ?
+        // Si enfant du sprite, scale du sprite impacte bulle. Mieux vaut update position.
+        // Pour ce MVP, bulle statique à l'endroit du message ou simple tracking via scene update ?
+        // On va laisser statique pour l'instant (message "lâché" dans le monde) ou simple parenting si possible?
+        // NON : Parenting Phaser Container -> Sprite n'est pas standard.
+        // On laisse comme ça, si le joueur bouge la bulle reste là un peu comme dans certains RPGs, ou on ajoute un simple update.
+        // On va ajouter un update callback à la scene.
+        const updateListener = () => {
+            if (!container.active) {
+                this.scene.events.off('update', updateListener);
+                return;
+            }
+            if (sprite.active) {
+                container.setPosition(sprite.x, sprite.y - 60);
+                container.setDepth(sprite.y + 1000); // Toujours devant
+            }
+        };
+        this.scene.events.on('update', updateListener);
     }
 }
