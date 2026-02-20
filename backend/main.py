@@ -120,7 +120,9 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await websocket.send_text(make_msg("PLAYER_SYNC", payload=user_data))
 
     # ── B. Synchro Monde ──
-    await websocket.send_text(make_msg("WORLD_STATE", payload=gameState.get_full_state()))
+    # NOTE (Session 8.3): On n'envoie plus WORLD_STATE ici automatiquement.
+    # Le client doit envoyer REQUEST_WORLD_STATE quand sa scène Phaser est prête.
+    # Cela corrige la race condition où les données arrivaient avant les listeners.
 
     try:
         while True:
@@ -239,6 +241,15 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 await manager.broadcast(make_msg(
                     "RESOURCE_PLACED",
                     resource=new_res
+                ))
+
+            # ──────────── REQUEST_WORLD_STATE (Handshake) ────────────
+            elif msg_type == "REQUEST_WORLD_STATE":
+                print(f"[WS] Client {client_id} requests WORLD_STATE (handshake)")
+                world_state = gameState.get_full_state()
+                await manager.send_to(client_id, make_msg(
+                    "WORLD_STATE",
+                    payload=world_state
                 ))
 
             # ──────────── PLAYER_CHAT ────────────

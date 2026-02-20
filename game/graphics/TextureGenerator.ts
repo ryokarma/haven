@@ -22,6 +22,7 @@ export class TextureGenerator {
         this.generateFireflyTexture();
         this.generateGlowTexture();
         this.generateResourceTextures();
+        this.generateAppleTreeTexture();
         this.generateToolTextures();
         this.generateFurnaceTexture();
         this.generateCeramicTexture();
@@ -204,6 +205,63 @@ export class TextureGenerator {
             g.generateTexture('tex_clay_mound', size, size);
             g.destroy();
         }
+    }
+
+    /**
+     * Génère la texture du pommier (apple_tree).
+     * Visuellement distinct de l'arbre standard : feuillage vert tendre, pommes rouges.
+     * Taille : 80x128 px pour conserver les mêmes proportions isométriques que 'tree'.
+     */
+    private generateAppleTreeTexture(): void {
+        if (this.scene.textures.exists('tex_apple_tree')) return;
+
+        const W = 80;
+        const H = 128;
+        const cx = W / 2;
+
+        const g = this.scene.make.graphics({ x: 0, y: 0 });
+
+        // Tronc (brun moyen)
+        g.fillStyle(0x795548, 1);
+        g.fillRect(cx - 6, H - 36, 12, 36);
+
+        // Racines légères
+        g.fillStyle(0x5D4037, 1);
+        g.fillRect(cx - 10, H - 10, 6, 10);
+        g.fillRect(cx + 4, H - 10, 6, 10);
+
+        // Feuillage principal (vert clair, plus rond que le tree standard)
+        g.fillStyle(0x66BB6A, 1);
+        g.fillCircle(cx, H - 68, 32);
+
+        // Couche secondaire (légèrement décalée, vert plus foncé pour la profondeur)
+        g.fillStyle(0x43A047, 1);
+        g.fillCircle(cx - 12, H - 72, 22);
+        g.fillCircle(cx + 12, H - 74, 20);
+
+        // Reflets de lumière sur le feuillage
+        g.fillStyle(0x81C784, 0.6);
+        g.fillCircle(cx - 4, H - 80, 12);
+
+        // Pommes rouges (6 pommes bien visibles)
+        g.fillStyle(0xE53935, 1);
+        g.fillCircle(cx - 14, H - 60, 5);
+        g.fillCircle(cx + 14, H - 64, 5);
+        g.fillCircle(cx, H - 58, 5);
+        g.fillCircle(cx - 6, H - 76, 4);
+        g.fillCircle(cx + 10, H - 78, 4);
+        g.fillCircle(cx - 20, H - 74, 4);
+
+        // Queue des pommes (fine ligne verte)
+        g.lineStyle(1, 0x33691E, 1);
+        g.beginPath();
+        g.moveTo(cx - 14, H - 65); g.lineTo(cx - 14, H - 68);
+        g.moveTo(cx + 14, H - 69); g.lineTo(cx + 14, H - 72);
+        g.moveTo(cx, H - 63); g.lineTo(cx, H - 66);
+        g.strokePath();
+
+        g.generateTexture('tex_apple_tree', W, H);
+        g.destroy();
     }
 
     /**

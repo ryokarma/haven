@@ -55,7 +55,9 @@
 
 ### Persistance
 - `UserManager` : Position + Wallet sauvegardés dans `backend/data/users.json`.
-- `GameState` : Ressources du monde en mémoire (10 ressources de test au démarrage).
+- `GameState` : Génération procédurale riche côté serveur (seed=42, grille 100x100 : ~2700 ressources).
+- Types générés : `tree` (10%), `rock` (5%), `cotton_bush` (4%), `clay_node` (3%), `apple_tree` (2%).
+- Index spatial `_spatial_index` pour les lookups O(1) lors des interactions.
 - Identité joueur persistante via `localStorage` (`haven_player_id`).
 
 ### Système de Survie (Local)
@@ -69,18 +71,19 @@
 ## 📡 Protocole WebSocket
 
 ### Client → Serveur
-| Message          | Payload                    | Description                    |
-|------------------|----------------------------|--------------------------------|
-| `PLAYER_MOVE`    | `{ x, y }`                | Destination de déplacement     |
-| `PLAYER_INTERACT`| `{ x, y }`                | Récolte / Interaction          |
-| `PLAYER_BUILD`   | `{ x, y, itemId }`        | Construction d'un objet        |
-| `PLAYER_CHAT`    | `{ text }`                 | Message de chat                |
+| Message               | Payload                    | Description                    |
+|-----------------------|----------------------------|--------------------------------|
+| `PLAYER_MOVE`         | `{ x, y }`                | Destination de déplacement     |
+| `PLAYER_INTERACT`     | `{ x, y }`                | Récolte / Interaction          |
+| `PLAYER_BUILD`        | `{ x, y, itemId }`        | Construction d'un objet        |
+| `PLAYER_CHAT`         | `{ text }`                 | Message de chat                |
+| `REQUEST_WORLD_STATE` | `{}`                       | Handshake : demande l'état du monde (envoyé quand la scène est prête) |
 
 ### Serveur → Client
 | Message            | Données                           | Description                      |
 |--------------------|-----------------------------------|----------------------------------|
-| `PLAYER_SYNC`      | `{ payload: userData }`           | Synchro initiale joueur          |
-| `WORLD_STATE`      | `{ payload: { resources } }`      | Synchro initiale monde           |
+| `PLAYER_SYNC`      | `{ payload: userData }`           | Synchro initiale joueur (auto à la connexion) |
+| `WORLD_STATE`      | `{ payload: { resources } }`      | Synchro monde (en réponse à `REQUEST_WORLD_STATE`) |
 | `CURRENT_PLAYERS`  | `{ players: [ids] }`             | Liste des joueurs connectés      |
 | `PLAYER_JOINED`    | `{ id }`                         | Nouveau joueur                   |
 | `PLAYER_LEFT`      | `{ id }`                         | Joueur déconnecté                |
@@ -180,3 +183,5 @@
 | **MVP** | 17/02/2026 | **Stabilisation MVP — Refonte Backend complète** |
 | 8.1     | 19/02/2026 | Fix du crash MainScene (Pinia state) et nettoyage des listeners |
 | 8.2     | 20/02/2026 | Rétablissement du rendu des objets via la synchronisation Server->Client |
+| 8.3     | 20/02/2026 | Implémentation du Handshake REQUEST_WORLD_STATE pour corriger la Race Condition au chargement des objets |
+| 8.4     | 20/02/2026 | Migration de la génération procédurale riche (Arbres, Rochers, Coton, Argile, Pommiers) vers le Backend Python et mapping des placeholders visuels |

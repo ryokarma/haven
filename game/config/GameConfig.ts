@@ -135,6 +135,19 @@ export const ASSET_MANIFEST: Record<string, AssetDefinition> = {
         originX: 0.5,
         originY: 0.5
     },
+    // clay_node → alias serveur pour "gisement d'argile", même visuel que clay_mound
+    'clay_node': {
+        assetKey: 'tex_clay_mound',
+        pixelHeight: 64,
+        originX: 0.5,
+        originY: 0.6
+    },
+    'apple_tree': {
+        assetKey: 'tex_apple_tree',
+        pixelHeight: 128,
+        originX: 0.5,
+        originY: 0.82
+    },
     'watering_can': {
         assetKey: 'tex_watering_can',
         pixelHeight: 32,

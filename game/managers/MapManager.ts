@@ -198,6 +198,22 @@ export class MapManager {
         }
     }
     /**
+     * Détermine si un asset est un sol traversable (ex: chemin, dallage).
+     * Par défaut, TOUS les objets sont bloquants sauf les floors et paths.
+     * Les types "obstacle" (tree, rock, cotton_bush, clay_node, apple_tree…) bloquent toujours.
+     *
+     * @param asset - Clé de l'asset (ex: "tree", "path_stone", "cotton_bush")
+     * @param role  - Rôle serveur ("obstacle" | "floor")
+     */
+    private isFloorAsset(asset: string, role: string): boolean {
+        // Le rôle serveur est autoritaire
+        if (role === 'floor') return true;
+        if (role === 'obstacle') return false;
+        // Fallback heuristique si le rôle est absent (legacy)
+        return asset.includes('path') || asset.includes('floor');
+    }
+
+    /**
      * Peuple la carte depuis l'état serveur (WORLD_STATE).
      * Délègue le rendu visuel à ObjectManager.syncWorldObjects() pour un nettoyage propre.
      * La grille de collision (gridData + occupiedTiles) est mise à jour via le callback.
@@ -217,11 +233,15 @@ export class MapManager {
             this.mapOriginX,
             this.mapOriginY,
             // Callback : mise à jour grille de collision pour chaque objet créé
-            (res, isFloor) => {
-                this.updateCell(res.x, res.y, isFloor ? 0 : 1);
+            (res, _isFloorFromSync) => {
+                // On recalcule via notre helper pour garantir la cohérence
+                const floor = this.isFloorAsset(res.asset, res.type);
+                this.updateCell(res.x, res.y, floor ? 0 : 1);
                 this.occupiedTiles.add(`${res.x},${res.y}`);
             }
         );
+
+        console.log(`[MapManager] Grille de collision mise à jour. ${this.occupiedTiles.size} tuile(s) occupée(s).`);
     }
 
     /**
@@ -232,8 +252,8 @@ export class MapManager {
     }
 
     /**
-     * Ajoute une ressource (venant du serveur)
-     * resource = { id, type: "obstacle"|"floor", asset: "tree"|"rock"|"path_stone", x, y }
+     * Ajoute une ressource dynamiquement (venant d'un RESOURCE_PLACED serveur).
+     * resource = { id, type: "obstacle"|"floor", asset: "tree"|"rock"|..., x, y }
      */
     public addResource(resource: any): void {
         // Le sprite utilise 'asset' (ex: "tree"), pas 'type' (ex: "obstacle")
@@ -249,9 +269,9 @@ export class MapManager {
             resource.id
         );
 
-        // Gestion Walkability : floor = traversable (0), obstacle = bloquant (1)
-        const isFloor = resource.type === 'floor' || spriteKey.includes('path');
-        this.updateCell(resource.x, resource.y, isFloor ? 0 : 1);
+        // Gestion Walkability via le helper centralisé
+        const floor = this.isFloorAsset(resource.asset || '', resource.type || '');
+        this.updateCell(resource.x, resource.y, floor ? 0 : 1);
 
         // Toujours ajouter aux occupiedTiles pour empêcher de reconstruire par dessus
         this.occupiedTiles.add(`${resource.x},${resource.y}`);

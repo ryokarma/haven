@@ -343,6 +343,12 @@ export class MainScene extends Scene {
         });
 
 
+        // --- HANDSHAKE : Demande explicite de l'état du monde ---
+        // On envoie cette requête une fois que TOUS les listeners sont enregistrés.
+        // Le serveur ne pousse plus WORLD_STATE automatiquement (Session 8.3).
+        // Cela garantit que la scène Phaser est prête à recevoir et traiter les données.
+        console.log('[MainScene] Envoi de REQUEST_WORLD_STATE (handshake)...');
+        networkStore.send('REQUEST_WORLD_STATE');
 
         // Cleanup on shutdown
         this.events.once('shutdown', this.shutdown, this);

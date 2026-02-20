@@ -12,7 +12,11 @@ export const RENDER_OFFSETS: Record<string, { originX: number; originY: number; 
     'tree': { originX: 0.5, originY: 0.82, offsetY: 0 },
     'rock': { originX: 0.5, originY: 0.72, offsetY: 0 },
     'cotton_bush': { originX: 0.5, originY: 1.0, offsetY: 0 },
-    'clay_mound': { originX: 0.5, originY: 0.5, offsetY: 0 }, // "Terre labourée" potentiel
+    'clay_mound': { originX: 0.5, originY: 0.5, offsetY: 0 },
+    // Alias serveur → même ancrage que clay_mound
+    'clay_node': { originX: 0.5, originY: 0.6, offsetY: 0 },
+    // Pommier → même ancrage que tree (même silhouette haute)
+    'apple_tree': { originX: 0.5, originY: 0.82, offsetY: 0 },
     'player': { originX: 0.5, originY: 1.0, offsetY: 0 },
     'clay_pot': { originX: 0.5, originY: 0.8, offsetY: 0 },
     'clay_pot_seeded': { originX: 0.5, originY: 0.8, offsetY: 0 },
@@ -20,7 +24,7 @@ export const RENDER_OFFSETS: Record<string, { originX: number; originY: number; 
     'clay_pot_ready': { originX: 0.5, originY: 0.9, offsetY: 0 },
     'furnace': { originX: 0.5, originY: 0.8, offsetY: 0 },
     'watering_can': { originX: 0.5, originY: 0.8, offsetY: 0 },
-    'path_stone': { originX: 0.5, originY: 0.5, offsetY: 0 }, // Sol plat
+    'path_stone': { originX: 0.5, originY: 0.5, offsetY: 0 },
 };
 
 /**
