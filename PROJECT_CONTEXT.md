@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — Haven
 
 > **État du projet : MVP Fonctionnel (Alpha 0.1)**
-> Dernière mise à jour : 17/02/2026
+> Dernière mise à jour : 20/02/2026
 
 ---
 
@@ -178,3 +178,5 @@
 | 7.2     | 17/02/2026 | Règles de Construction & Collisions              |
 | 7.3     | 17/02/2026 | Sols et Gestion des Calques                      |
 | **MVP** | 17/02/2026 | **Stabilisation MVP — Refonte Backend complète** |
+| 8.1     | 19/02/2026 | Fix du crash MainScene (Pinia state) et nettoyage des listeners |
+| 8.2     | 20/02/2026 | Rétablissement du rendu des objets via la synchronisation Server->Client |

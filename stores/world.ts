@@ -1,9 +1,26 @@
 import { defineStore } from 'pinia';
 
+/**
+ * Représente un objet du monde reçu depuis le serveur.
+ * Correspond au format de `GameState.resources` côté backend Python.
+ */
+export interface ServerWorldObject {
+    id: string;
+    type: string;   // "obstacle" | "floor"
+    asset: string;  // "tree" | "rock" | "path_stone" | etc.
+    x: number;
+    y: number;
+}
+
 export interface WorldState {
     worldSeed: string;
     time: number;
     isMapLoaded: boolean;
+    /**
+     * Liste réactive des objets reçus depuis le serveur (WORLD_STATE).
+     * Utilisée par l'ObjectManager pour le rendu visuel initial.
+     */
+    serverObjects: ServerWorldObject[];
 }
 
 
@@ -11,7 +28,8 @@ export const useWorldStore = defineStore('world', {
     state: (): WorldState => ({
         worldSeed: '',
         time: 480, // Commence à 08:00
-        isMapLoaded: false
+        isMapLoaded: false,
+        serverObjects: [],
     }),
     getters: {
         hours: (state) => Math.floor(state.time / 60),
@@ -65,10 +83,36 @@ export const useWorldStore = defineStore('world', {
             console.log(`[WorldStore] Seed régénérée: ${this.worldSeed}`);
         },
 
-        loadWorldState(payload: any) {
-            // Pour l'instant on stocke juste l'info si besoin, mais c'est le MapManager qui fera le rendu.
-            // On pourrait stocker les ressources ici si on voulait une source de vérité côté client.
-            console.log('[WorldStore] État du monde reçu du serveur', payload);
-        }
+        /**
+         * Reçoit et stocke l'état initial du monde envoyé par le serveur (WORLD_STATE).
+         * Le payload est { resources: ServerWorldObject[] }.
+         * Les objets sont stockés dans `serverObjects` pour être consommés par l'ObjectManager.
+         */
+        loadWorldState(payload: { resources?: ServerWorldObject[] }) {
+            if (payload?.resources && Array.isArray(payload.resources)) {
+                this.serverObjects = payload.resources;
+                console.log(`[WorldStore] ${this.serverObjects.length} objet(s) du monde chargés depuis le serveur.`);
+            } else {
+                console.warn('[WorldStore] WORLD_STATE reçu mais payload.resources absent ou invalide.', payload);
+            }
+        },
+
+        /**
+         * Ajoute un objet au monde (reçu via RESOURCE_PLACED).
+         */
+        addServerObject(obj: ServerWorldObject) {
+            // Évite les doublons sur le même id
+            const exists = this.serverObjects.some(o => o.id === obj.id);
+            if (!exists) {
+                this.serverObjects.push(obj);
+            }
+        },
+
+        /**
+         * Supprime un objet du monde (reçu via RESOURCE_REMOVED).
+         */
+        removeServerObject(id: string) {
+            this.serverObjects = this.serverObjects.filter(o => o.id !== id);
+        },
     }
 });

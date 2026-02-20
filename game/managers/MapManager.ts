@@ -198,26 +198,30 @@ export class MapManager {
         }
     }
     /**
-     * Peuple la carte depuis l'état serveur
+     * Peuple la carte depuis l'état serveur (WORLD_STATE).
+     * Délègue le rendu visuel à ObjectManager.syncWorldObjects() pour un nettoyage propre.
+     * La grille de collision (gridData + occupiedTiles) est mise à jour via le callback.
+     *
+     * @param resources - Liste des ressources reçues du serveur
      */
     public populateFromState(resources: any[]): void {
-        console.log(`[MapManager] Populating map with ${resources.length} resources from server.`);
+        console.log(`[MapManager] populateFromState — ${resources.length} ressource(s) à instancier.`);
 
-        // Optionnel: Nettoyer les objets existants si on recharge tout (sauf ceux du joueur si on sépare ?)
-        // Pour l'instant on suppose que c'est une init initiale.
+        // Réinitialise les tiles occupées par des ressources serveur
+        // (les objets placés par le joueur sont gérés séparément)
+        this.occupiedTiles.clear();
 
-        resources.forEach(res => {
-            // Le sprite utilise 'asset' (ex: "tree"), pas 'type' (ex: "obstacle")
-            const spriteKey = res.asset || res.type;
-            this.objectManager.placeObject(res.x, res.y, spriteKey, this.mapOriginX, this.mapOriginY, false, res.id);
-
-            // On met à jour la grille locale pour le pathfinding / collisions
-            // 1 = Obstacle, 0 = Traversable (Sols)
-            const isFloor = res.type === 'floor' || spriteKey.includes('path');
-            this.updateCell(res.x, res.y, isFloor ? 0 : 1);
-
-            this.occupiedTiles.add(`${res.x},${res.y}`);
-        });
+        // Délégation à ObjectManager : nettoyage + instanciation des sprites
+        this.objectManager.syncWorldObjects(
+            resources,
+            this.mapOriginX,
+            this.mapOriginY,
+            // Callback : mise à jour grille de collision pour chaque objet créé
+            (res, isFloor) => {
+                this.updateCell(res.x, res.y, isFloor ? 0 : 1);
+                this.occupiedTiles.add(`${res.x},${res.y}`);
+            }
+        );
     }
 
     /**

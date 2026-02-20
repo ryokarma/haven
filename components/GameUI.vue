@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { usePlayerStore } from '@/stores/player';
 import { useWorldStore } from '@/stores/world';
 import CraftingWindow from './CraftingWindow.vue';
@@ -11,19 +11,7 @@ const isInventoryOpen = ref(false);
 const isCraftingOpen = ref(false);
 const isCharacterOpen = ref(false);
 
-// --- CHAT ---
-interface Message { author: string; text: string; }
-const messages = ref<Message[]>([
-  { author: 'Système', text: 'Bienvenue sur Haven.' },
-  { author: 'Tuto', text: 'Cliquez sur un arbre ou un rocher pour récolter.' }
-]);
-const newMessage = ref('');
 
-const sendMessage = () => {
-  if (!newMessage.value.trim()) return;
-  messages.value.push({ author: player.username, text: newMessage.value });
-  newMessage.value = '';
-};
 
 // --- ICONES SVG ---
 // On remplace les emojis par des SVG plus "Pro" qui s'adaptent à la couleur du texte
@@ -52,6 +40,23 @@ const resetSave = () => {
 const handleItemClick = (itemName: string) => {
   player.consumeItem(itemName);
 };
+
+// --- FEEDBACK SYSTEM ---
+const feedbackMessage = ref<string | null>(null);
+let feedbackTimeout: ReturnType<typeof setTimeout>;
+
+watch(() => player.lastActionFeedback, (newVal) => {
+  if (!newVal) return;
+  
+  // Le format est "Message#Timestamp"
+  const message = newVal.split('#')[0] || '';
+  feedbackMessage.value = message;
+
+  if (feedbackTimeout) clearTimeout(feedbackTimeout);
+  feedbackTimeout = setTimeout(() => {
+    feedbackMessage.value = null;
+  }, 3000);
+});
 </script>
 
 <template>
@@ -76,6 +81,13 @@ const handleItemClick = (itemName: string) => {
             <div class="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-slate-900 border border-white/20 shadow-sm">
                 {{ player.level }}
             </div>
+        </div>
+
+        <!-- FEEDBACK TOAST -->
+        <div v-if="feedbackMessage" class="absolute left-20 -top-8 pointer-events-none animate-slide-in">
+             <div class="bg-black/60 text-white text-sm px-3 py-1 rounded-full backdrop-blur-md border border-white/10 shadow-lg whitespace-nowrap">
+                 {{ feedbackMessage }}
+             </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
@@ -128,8 +140,7 @@ const handleItemClick = (itemName: string) => {
         </div>
     </div>
 
-        </div>
-    </div>
+
 
     <!-- WALLET DISPLAY (Coin supérieur gauche) -->
     <div class="pointer-events-auto absolute top-4 left-4 z-40 flex flex-col gap-2">
@@ -230,7 +241,6 @@ const handleItemClick = (itemName: string) => {
       </div>
 
     </div>
-  </div>
 </template>
 
 <style scoped>
@@ -242,8 +252,4 @@ h1 { font-family: 'Merriweather', serif; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
-
-/* Scrollbar fine pour le chat */
-.scrollbar-thin::-webkit-scrollbar { width: 4px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
 </style>

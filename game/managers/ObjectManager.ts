@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { IsoMath } from '../utils/IsoMath';
 import { GameConfig, ASSET_MANIFEST } from '../config/GameConfig';
+import type { ServerWorldObject } from '../../stores/world';
 
 /**
  * Configuration centralisée des décalages de rendu
@@ -231,7 +232,12 @@ export class ObjectManager {
      * Nettoie tous les objets
      */
     clear(): void {
-        this.objectMap.forEach(obj => obj.destroy());
+        this.objectMap.forEach(obj => {
+            // Détruire la lumière attachée si présente avant de détruire l'objet
+            const light = obj.getData('light') as Phaser.GameObjects.Image | undefined;
+            if (light) light.destroy();
+            obj.destroy();
+        });
         this.objectMap.clear();
     }
 
@@ -240,6 +246,75 @@ export class ObjectManager {
      */
     getObjectMap(): Map<string, Phaser.GameObjects.Image> {
         return this.objectMap;
+    }
+
+    /**
+     * Synchronise les objets du monde depuis l'état serveur.
+     * Nettoie tous les sprites NON placés par le joueur, puis recrée
+     * proprement chaque objet reçu. Empêche les doublons lors d'un reload.
+     *
+     * @param objects - Liste des ressources reçues via WORLD_STATE
+     * @param mapOriginX - Origine X de la carte isométrique
+     * @param mapOriginY - Origine Y de la carte isométrique
+     * @param onObjectPlaced - Callback optionnel appelé pour chaque objet placé
+     *                         (utile pour mettre à jour la grille de pathfinding)
+     */
+    syncWorldObjects(
+        objects: ServerWorldObject[],
+        mapOriginX: number,
+        mapOriginY: number,
+        onObjectPlaced?: (obj: ServerWorldObject, isFloor: boolean) => void
+    ): void {
+        console.log(`[ObjectManager] syncWorldObjects — ${objects.length} objet(s) à synchroniser.`);
+
+        // 1. Nettoyage des objets du monde existants (pas ceux placés par le joueur)
+        //    On itère sur une copie des clés pour éviter les mutations pendant le forEach
+        const keysToRemove: string[] = [];
+        this.objectMap.forEach((obj, key) => {
+            if (!obj.getData('isPlayerPlaced')) {
+                keysToRemove.push(key);
+            }
+        });
+        keysToRemove.forEach(key => {
+            const obj = this.objectMap.get(key);
+            if (obj) {
+                const light = obj.getData('light') as Phaser.GameObjects.Image | undefined;
+                if (light) light.destroy();
+                obj.destroy();
+                this.objectMap.delete(key);
+            }
+        });
+
+        // 2. Instanciation des objets depuis le serveur
+        objects.forEach(res => {
+            // Clé de collision pour éviter les doublons résiduels
+            const key = `${res.x},${res.y}`;
+            if (this.objectMap.has(key)) {
+                console.warn(`[ObjectManager] Doublon ignoré à la position ${key} (type: ${res.asset || res.type}).`);
+                return;
+            }
+
+            // Le champ 'asset' contient le nom du sprite (ex: "tree"), 'type' est le rôle ("obstacle")
+            const spriteKey = res.asset || res.type;
+
+            this.placeObject(
+                res.x,
+                res.y,
+                spriteKey,
+                mapOriginX,
+                mapOriginY,
+                false,      // isPlayerPlaced = false (vient du serveur)
+                res.id      // server_id pour les suppressions futures
+            );
+
+            // Callback pour mettre à jour la grille (ex: pathfinding)
+            if (onObjectPlaced) {
+                const isFloor = res.type === 'floor' || spriteKey.includes('path');
+                onObjectPlaced(res, isFloor);
+            }
+        });
+
+        console.log(`[ObjectManager] Synchronisation terminée. ${this.objectMap.size} objet(s) total dans la scène.`);
     }
 
     /**

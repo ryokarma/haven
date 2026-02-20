@@ -1,7 +1,9 @@
 import { Scene } from 'phaser';
 import { usePlayerStore } from '@/stores/player';
 import { useNetworkStore } from '@/stores/network';
+import { useWorldStore } from '@/stores/world';
 import { getItemData, type ToolType } from '@/game/config/ItemRegistry';
+import { useChatStore } from '@/stores/chat';
 import { useBuildStore } from '@/stores/build';
 import { IsoMath } from '@/game/utils/IsoMath';
 import { GameConfig } from '@/game/config/GameConfig';
@@ -268,8 +270,20 @@ export class MainScene extends Scene {
                 this.objectManager.moveRemotePlayer(msg.id, msg.x, msg.y);
             }
             else if (msg.type === 'WORLD_STATE') {
-                if (msg.payload && msg.payload.resources) {
+                if (msg.payload && msg.payload.resources && Array.isArray(msg.payload.resources)) {
+                    // 1. Stocker l'état de manière réactive dans le worldStore (source de vérité Pinia)
+                    this.worldStore.loadWorldState(msg.payload);
+
+                    // 2. Instancier visuellement les objets via MapManager → ObjectManager.syncWorldObjects()
+                    //    (nettoyage des doublons + placement sur la carte isométrique inclus)
                     this.mapManager.populateFromState(msg.payload.resources);
+
+                    // 3. Mettre à jour la grille de pathfinding avec les nouvelles collisions
+                    this.pathfindingManager.updateGrid(this.mapManager.gridData);
+
+                    console.log(`[MainScene] WORLD_STATE appliqué : ${msg.payload.resources.length} objet(s) placé(s).`);
+                } else {
+                    console.warn('[MainScene] WORLD_STATE reçu mais payload.resources absent ou vide.', msg);
                 }
             }
             else if (msg.type === 'RESOURCE_PLACED') {
@@ -293,9 +307,7 @@ export class MainScene extends Scene {
         // SYSTEME DE FEEDBACK (Chat & Economie)
 
         // 1. Chat Bubbles
-        const chatStore = (window as any).pinia.state.value.chat; // Hack si besoin ou via store direct
-        // Mieux : écouter le store via subscribe ou watch
-        // Comme on est dans Phaser (hors Vue setup), on utilise l'abonnement Pinia
+        const chatStore = useChatStore();
 
         // Ecoute directe via NetworkStore (plus simple car on a déjà le message ici)
         networkStore.onMessage((msg: any) => {
@@ -330,31 +342,7 @@ export class MainScene extends Scene {
             }
         });
 
-        // Solution propre pour Economy Feedback : Subscribe to PlayerStore changes
-        this.playerStore.$subscribe((mutation, state) => {
-            // On ne peut pas facilement avoir le "oldValue" avec $subscribe standard sur tout le state
-            // Mais on peut faire un watch manuel si on était dans Vue.
-            // Ici, on va utiliser une astuce : l'action `updateEconomyInventory` dans le store va être modifiée 
-            // pour retourner la différence, et on l'utilise si on l'appelle nous-même... 
-            // MAIS c'est le NetworkStore qui l'appelle.
 
-            // Alternative : On intercepte le message WALLET_UPDATE dans NetworkStore avant update ?
-            // NON. 
-            // On va simplement patcher le `updateEconomyInventory` du store player pour qu'il dispatch un event custom sur window/scene ?
-            // Ou plus simple : Dans MainScene, on écoute 'WALLET_UPDATE' dans le bloc ci-dessus, et on fait le diff MANUELLEMENT
-            // en comparant `msg.payload` (nouveau) avec `this.playerStore.economyInventory` (qui est encore l'ancien SI le networkStore callback est après ?)
-            // VERIFIONS L'ORDRE :
-            // MainScene : networkStore.listenForWalletUpdates() (Enregistre Callback A)
-            // MainScene : networkStore.onMessage(...) (Enregistre Callback B)
-            // NetworkStore exécute callbacks dans l'ordre. Donc A (Update Store) se lance AVANT B.
-            // Donc dans B, le store est déjà à jour.
-
-            // CORRECTION : On va inverser ou enregistrer notre listener B AVANT A ?
-            // Difficile à garantir.
-
-            // MEILLEURE SOLUTION : Modifier `playerStore.updateEconomyInventory` pour accepter un Callback de feedback
-            // Ou ajouter un champ `lastDiff` dans le store.
-        });
 
         // Cleanup on shutdown
         this.events.once('shutdown', this.shutdown, this);
