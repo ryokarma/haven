@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { IsoMath } from '../utils/IsoMath';
 import { GameConfig } from '../config/GameConfig';
+import { useNetworkStore } from '../../stores/network';
 
 export type InputEvent = {
     x: number;
@@ -95,10 +96,24 @@ export class InputManager {
 
         // Support spécial pour les GameObjects interactifs (si besoin spécifique)
         this.scene.input.on('gameobjectup', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject) => {
-            // Si on veut une logique spécifique au clic sur objet (ex: priorité sur le sol)
-            // Pour l'instant on laisse handleClick gérer via les coordonnées de grille,
-            // mais on pourrait émettre un événement 'objectClicked' ici.
-            // Le système actuel "Grid Based" préfère souvent traiter la case entière.
+            const serverId = gameObject.getData('server_id');
+            const type = gameObject.getData('type');
+            const gridX = gameObject.getData('gridX') as number;
+            const gridY = gameObject.getData('gridY') as number;
+
+            // Si le clic intercepte une ressource récoltable avec un ID serveur défini,
+            // on émet un événement sémantique plutôt que d'envoyer ACTION_HARVEST immédiatement.
+            // MainScene.ts se chargera de lancer le pathfinding, puis d'envoyer l'action
+            // une fois le joueur arrivé à destination (in the `pendingAction` callback).
+            if (serverId && ['tree', 'rock', 'cotton_bush', 'clay_node', 'apple_tree'].includes(type)) {
+                this.events.emit('resource-clicked', {
+                    serverId,
+                    type,
+                    x: gridX,
+                    y: gridY,
+                });
+                console.log(`[InputManager] Clic sur ressource ${type} (id: ${serverId}) → pathfinding requis.`);
+            }
         });
     }
 

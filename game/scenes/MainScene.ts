@@ -267,7 +267,10 @@ export class MainScene extends Scene {
                 }
             }
             else if (msg.type === 'PLAYER_MOVED') {
-                this.objectManager.moveRemotePlayer(msg.id, msg.x, msg.y);
+                // Session 9.4 : Le serveur envoie désormais des coords GRILLE.
+                // On convertit en ISO pour positionner le sprite distant.
+                const remoteIso = IsoMath.gridToIso(msg.x, msg.y, this.mapOriginX, this.mapOriginY);
+                this.objectManager.moveRemotePlayer(msg.id, remoteIso.x, remoteIso.y);
             }
             else if (msg.type === 'WORLD_STATE') {
                 if (msg.payload && msg.payload.resources && Array.isArray(msg.payload.resources)) {
@@ -292,15 +295,50 @@ export class MainScene extends Scene {
             else if (msg.type === 'RESOURCE_REMOVED') {
                 this.mapManager.removeResource(msg.id, msg.x, msg.y);
             }
+            else if (msg.type === 'HARVEST_SUCCESS') {
+                const px = msg.x;
+                const py = msg.y;
+                const screenPos = IsoMath.gridToIso(px, py, this.mapOriginX, this.mapOriginY);
+                // Le loot est un dictionnaire ex: { wood: 1, cotton: 2 }
+                if (msg.loot) {
+                    for (const [resType, amount] of Object.entries(msg.loot)) {
+                        // Utiliser une couleur selon la ressource pour le polish
+                        let color = "#fbbf24"; // jaune/ambre par defaut
+                        let label = resType;
+                        if (resType === 'wood') { color = "#d97706"; label = 'Bois'; }
+                        else if (resType === 'stone') { color = "#9ca3af"; label = 'Pierre'; }
+                        else if (resType === 'cotton_plant') { color = "#f3f4f6"; label = 'Coton'; }
+
+                        this.showFloatingText(screenPos.x, screenPos.y - 50, `+${amount} ${label}`, color);
+                    }
+                }
+            }
             else if (msg.type === 'PLAYER_SYNC') {
                 const userData = msg.payload;
                 if (userData && userData.x !== undefined && userData.y !== undefined) {
-                    console.log(`[MainScene] Sync Player Position to ${userData.x}, ${userData.y}`);
-                    this.player.setIsoPosition(userData.x, userData.y, this.mapOriginX, this.mapOriginY);
+                    // ── Antidote Rubberbanding ──
+                    // Si le joueur est en train de se déplacer (tween actif),
+                    // on ne touche PAS à sa position locale. Cela empêche le serveur
+                    // de "snap" le sprite vers une ancienne position, créant le saccadé.
+                    if (this.isMoving) {
+                        console.log('[MainScene] PLAYER_SYNC ignoré (mouvement en cours).');
+                        return;
+                    }
+
+                    // Le serveur stocke désormais les coords GRILLE (session 9.4).
+                    // On convertit en ISO pour positionner le sprite.
+                    const isoPos = IsoMath.gridToIso(userData.x, userData.y, this.mapOriginX, this.mapOriginY);
+                    console.log(`[MainScene] Sync Player Position (grid: ${userData.x}, ${userData.y})`);
+                    this.player.setIsoPosition(isoPos.x, isoPos.y, this.mapOriginX, this.mapOriginY);
 
                     // Centrer caméra
-                    this.cameras.main.centerOn(userData.x, userData.y);
+                    this.cameras.main.centerOn(isoPos.x, isoPos.y);
                 }
+            }
+            else if (msg.type === 'ERROR') {
+                // Afficher le message d'erreur du serveur au-dessus du joueur (Feedback Visuel)
+                const sprite = this.player.getSprite();
+                this.showFloatingText(sprite.x, sprite.y - 50, msg.message || "Action refusée", "#ef4444");
             }
         });
 
@@ -465,6 +503,13 @@ export class MainScene extends Scene {
                 networkStore.sendBuild(x, y, this.buildStore.selectedItemId);
             }
         });
+
+        // Clic sur une ressource du serveur (via gameobjectup dans InputManager)
+        // Le clic arrive AVANT que le joueur soit arrivé : on lance le pathfinding,
+        // et l'ACTION_HARVEST est envoyée uniquement lorsqu'il est à portée.
+        this.inputManager.events.on('resource-clicked', (event: { serverId: string; type: string; x: number; y: number }) => {
+            this.handleHarvestIntent(event.x, event.y);
+        });
     }
 
     /**
@@ -612,136 +657,98 @@ export class MainScene extends Scene {
         const playerPos = this.player.getGridPosition();
         const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, targetX, targetY);
 
+        // Vérification Globale de Distance pour la récolte
+        if (dist > 1.5) {
+            const objectPos = IsoMath.gridToIso(targetX, targetY, this.mapOriginX, this.mapOriginY);
+            this.showFloatingText(objectPos.x, objectPos.y - 50, "Trop loin !", "#ef4444");
+            return;
+        }
+
         // Interaction : Plantation (Pot vide + Graine)
         if (object && object.getData('type') === 'clay_pot') {
-            if (dist < 2) {
-                const mainHand = this.playerStore.equipment.mainHand;
-                if (mainHand && mainHand.name === 'cotton_seeds') {
-                    // Consommer la graine (Déséquiper -> Retirer 1)
-                    this.playerStore.unequipItem('mainHand');
-                    this.playerStore.removeItem('cotton_seeds', 1);
+            const mainHand = this.playerStore.equipment.mainHand;
+            if (mainHand && mainHand.name === 'cotton_seeds') {
+                // Consommer la graine (Déséquiper -> Retirer 1)
+                this.playerStore.unequipItem('mainHand');
+                this.playerStore.removeItem('cotton_seeds', 1);
 
-                    // Remplacer l'objet
-                    const tx = object.getData('gridX');
-                    const ty = object.getData('gridY');
-                    this.objectManager.removeObject(tx, ty);
+                // Remplacer l'objet
+                const tx = object.getData('gridX');
+                const ty = object.getData('gridY');
+                this.objectManager.removeObject(tx, ty);
 
-                    const seededPot = this.objectManager.placeObject(tx, ty, 'clay_pot_seeded', this.mapOriginX, this.mapOriginY, true);
-                    seededPot.setName('Pot (Semis)');
-                    seededPot.setData('type', 'clay_pot_seeded');
+                const seededPot = this.objectManager.placeObject(tx, ty, 'clay_pot_seeded', this.mapOriginX, this.mapOriginY, true);
+                seededPot.setName('Pot (Semis)');
+                seededPot.setData('type', 'clay_pot_seeded');
 
-                    // Obstacle
-                    this.mapManager.updateCell(tx, ty, 1);
+                // Obstacle
+                this.mapManager.updateCell(tx, ty, 1);
 
-                    this.showFloatingText(object.x, object.y - 50, "Planté !", "#4ade80");
-                    return;
-                }
+                this.showFloatingText(object.x, object.y - 50, "Planté !", "#4ade80");
+                return;
             }
         }
 
         // Interaction : Arrosage (Pot semé + Arrosoir)
         if (object && object.getData('type') === 'clay_pot_seeded') {
-            if (dist < 2) {
-                const mainHand = this.playerStore.equipment.mainHand;
-                if (mainHand && mainHand.name === 'watering_can') {
-                    // Arroser
-                    const tx = object.getData('gridX');
-                    const ty = object.getData('gridY');
-                    this.objectManager.removeObject(tx, ty);
+            const mainHand = this.playerStore.equipment.mainHand;
+            if (mainHand && mainHand.name === 'watering_can') {
+                // Arroser
+                const tx = object.getData('gridX');
+                const ty = object.getData('gridY');
+                this.objectManager.removeObject(tx, ty);
 
-                    const wateredPot = this.objectManager.placeObject(tx, ty, 'clay_pot_watered', this.mapOriginX, this.mapOriginY, true);
-                    wateredPot.setName('Pot (Arrosé)');
-                    wateredPot.setData('type', 'clay_pot_watered');
-                    this.mapManager.updateCell(tx, ty, 1);
+                const wateredPot = this.objectManager.placeObject(tx, ty, 'clay_pot_watered', this.mapOriginX, this.mapOriginY, true);
+                wateredPot.setName('Pot (Arrosé)');
+                wateredPot.setData('type', 'clay_pot_watered');
+                this.mapManager.updateCell(tx, ty, 1);
 
-                    this.showFloatingText(object.x, object.y - 50, "Arrosé !", "#29B6F6");
-                    return;
-                }
+                this.showFloatingText(object.x, object.y - 50, "Arrosé !", "#29B6F6");
+                return;
             }
         }
 
         // Interaction : Récolte Finale (Pot Prêt + Gants)
         if (object && object.getData('type') === 'clay_pot_ready') {
-            if (dist < 2) {
-                const accessory = this.playerStore.equipment.accessory;
-                if (accessory?.name === 'gloves') {
-                    // Récolte
-                    const nbPlants = Phaser.Math.Between(2, 4);
-                    const nbSeeds = Phaser.Math.Between(1, 2);
+            const accessory = this.playerStore.equipment.accessory;
+            if (accessory?.name === 'gloves') {
+                // Récolte
+                const nbPlants = Phaser.Math.Between(2, 4);
+                const nbSeeds = Phaser.Math.Between(1, 2);
 
-                    this.playerStore.addItem('cotton_plant', nbPlants);
-                    this.playerStore.addItem('cotton_seeds', nbSeeds);
+                this.playerStore.addItem('cotton_plant', nbPlants);
+                this.playerStore.addItem('cotton_seeds', nbSeeds);
 
-                    const tx = object.getData('gridX');
-                    const ty = object.getData('gridY');
-                    this.objectManager.removeObject(tx, ty);
+                const tx = object.getData('gridX');
+                const ty = object.getData('gridY');
+                this.objectManager.removeObject(tx, ty);
 
-                    // Reset to empty pot
-                    const pot = this.objectManager.placeObject(tx, ty, 'clay_pot', this.mapOriginX, this.mapOriginY, true);
-                    pot.setName('Pot en argile');
-                    pot.setData('type', 'clay_pot');
-                    this.mapManager.updateCell(tx, ty, 0);
+                // Reset to empty pot
+                const pot = this.objectManager.placeObject(tx, ty, 'clay_pot', this.mapOriginX, this.mapOriginY, true);
+                pot.setName('Pot en argile');
+                pot.setData('type', 'clay_pot');
+                this.mapManager.updateCell(tx, ty, 0);
 
-                    this.showFloatingText(object.x, object.y - 50, `+${nbPlants} Coton`, "#4ade80");
-                    return;
-                } else {
-                    this.showFloatingText(object.x, object.y - 50, "Il faut des gants !", "#ef4444");
-                }
-            }
-        }
-
-        // Interaction spéciale : Pommier (sans détruire l'arbre)
-        if (object && object.getData('subType') === 'apple_tree') {
-            if (dist < 2) {
-                this.playerStore.addItem('Pomme');
-
-                const objectPos = IsoMath.gridToIso(targetX, targetY, this.mapOriginX, this.mapOriginY);
-                this.showFloatingText(objectPos.x, objectPos.y - 50, "+1 Pomme", "#ef4444"); // Rouge
-
-                // Animation de secousse
-                this.tweens.add({
-                    targets: object,
-                    x: object.x + 3,
-                    yoyo: true,
-                    duration: 50,
-                    repeat: 5
-                });
+                this.showFloatingText(object.x, object.y - 50, `+${nbPlants} Coton`, "#4ade80");
+                return;
+            } else {
+                this.showFloatingText(object.x, object.y - 50, "Il faut des gants !", "#ef4444");
                 return;
             }
         }
 
-        const gridData = this.mapManager.gridData;
-
-        // Trouve les tuiles adjacentes (incluant les diagonales)
-        const neighbors = [
-            { x: targetX + 1, y: targetY },
-            { x: targetX - 1, y: targetY },
-            { x: targetX, y: targetY + 1 },
-            { x: targetX, y: targetY - 1 },
-            { x: targetX + 1, y: targetY + 1 },
-            { x: targetX + 1, y: targetY - 1 },
-            { x: targetX - 1, y: targetY + 1 },
-            { x: targetX - 1, y: targetY - 1 }
-        ];
-
-        const validNeighbors = neighbors.filter(n =>
-            this.isValidTile(n.x, n.y) &&
-            gridData[n.y]?.[n.x] === 0
-        );
-
-        if (validNeighbors.length === 0) return;
-
-        const bestSpot = validNeighbors.sort((a, b) => {
-            const d1 = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, a.x, a.y);
-            const d2 = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, b.x, b.y);
-            return d1 - d2;
-        })[0];
-
-        if (bestSpot) {
-            this.startMove(bestSpot.x, bestSpot.y, () => {
-                this.harvestResource(targetX, targetY);
-            });
+        // Interaction spéciale : Pommier (sans détruire l'arbre) - Côté Client Fallback
+        // (La récolte réelle et la récompense se font côté Serveur via harvestResource)
+        if (object && object.getData('subType') === 'apple_tree') {
+            // Note: On pourrait traiter l'apple_tree comme une ressource serveurs classique 
+            // The object will just pass through to harvestResource below!
+            // which will send ACTION_HARVEST, and the server calculates loot.
+            // On laisse donc `harvestResource` s'en occuper.
         }
+
+        // Récolte Générique (Arbres, Rochers, etc + Pommiers)
+        // Déclenchement immédiat puisque la distance <= 1.5
+        this.harvestResource(targetX, targetY);
     }
 
     /**
@@ -768,7 +775,7 @@ export class MainScene extends Scene {
                     requiredTool = 'knife'; requiredToolName = 'un couteau';
                 }
             }
-            else if (type === 'clay_mound') { requiredTool = 'shovel'; requiredToolName = 'une pelle'; }
+            else if (type === 'clay_mound' || type === 'clay_node') { requiredTool = 'shovel'; requiredToolName = 'une pelle'; }
 
             // Vérification de l'outil
             if (requiredTool !== 'none' && currentToolType !== requiredTool) {
@@ -802,31 +809,37 @@ export class MainScene extends Scene {
                 duration: 50,
                 repeat: 3,
                 onComplete: () => {
-                    let itemDropped = '';
+                    // Délégation Autorité Serveur
+                    const serverId = object.getData('server_id');
+                    if (serverId) {
+                        const networkStore = useNetworkStore();
+                        networkStore.sendHarvest(serverId, currentToolType);
+                        // On ne détruit plus l'objet localement, on attend la réponse WORLD_STATE / HARVEST_SUCCESS du serveur.
+                    } else {
+                        // Fallback pour les objets locaux (ex: farm local non synchronisé si ça existe encore)
+                        let itemDropped = '';
+                        let count = 1;
 
-                    let count = 1;
-
-                    if (type === 'tree') itemDropped = 'Bois';
-                    else if (type === 'rock') itemDropped = 'Pierre';
-                    else if (type === 'cotton_bush') {
-                        if (this.playerStore.equipment.accessory?.name === 'gloves') {
-                            itemDropped = 'cotton_seeds';
-                            count = Phaser.Math.Between(1, 3);
-                        } else {
-                            itemDropped = 'cotton_plant';
+                        if (type === 'tree') itemDropped = 'Bois';
+                        else if (type === 'rock') itemDropped = 'Pierre';
+                        else if (type === 'cotton_bush') {
+                            if (this.playerStore.equipment.accessory?.name === 'gloves') {
+                                itemDropped = 'cotton_seeds';
+                                count = Phaser.Math.Between(1, 3);
+                            } else {
+                                itemDropped = 'cotton_plant';
+                            }
                         }
-                    }
-                    else if (type === 'clay_mound') itemDropped = 'raw_clay';
+                        else if (type === 'clay_mound' || type === 'clay_node') itemDropped = 'raw_clay';
 
-                    this.objectManager.removeObject(x, y);
+                        this.objectManager.removeObject(x, y);
+                        this.mapManager.updateCell(x, y, 0);
+                        this.pathfindingManager.updateGrid(this.mapManager.gridData);
 
-                    // Mise à jour Data
-                    this.mapManager.updateCell(x, y, 0);
-                    this.pathfindingManager.updateGrid(this.mapManager.gridData);
-
-                    if (itemDropped) {
-                        this.playerStore.addItem(itemDropped, count);
-                        this.showFloatingText(object.x, object.y - 50, `+${count} ${itemDropped}`, "#fbbf24"); // Ambre/Jaune
+                        if (itemDropped) {
+                            this.playerStore.addItem(itemDropped, count);
+                            this.showFloatingText(object.x, object.y - 50, `+${count} ${itemDropped}`, "#fbbf24");
+                        }
                     }
                 }
             });
@@ -862,12 +875,13 @@ export class MainScene extends Scene {
                 // Le serveur attend des coordonnées. Idéalement Iso pour l'affichage direct par les autres.
                 // ObjectManager.moveRemotePlayer attend des coordonnées écran (Iso).
 
-                const targetIso = IsoMath.gridToIso(x, y, this.mapOriginX, this.mapOriginY);
-                // On utilise le store qui est déjà importé mais pas assigné à une propriété de classe
-                // On va devoir le récupérer via useNetworkStore() car pas stocké dans 'this'
-                // Ou mieux, on l'ajoute aux propriétés de la classe.
+                // ── Session 9.4 : Envoi en coordonnées GRILLE ──
+                // Le serveur stocke x,y du joueur pour la validation de distance (harvest).
+                // Les ressources sont en coords grille → le joueur doit aussi être en grille.
+                // L'ancien code envoyait des coordonnées ISO (pixels), causant un mismatch
+                // et l'échec systématique de la validation de distance.
                 const networkStore = useNetworkStore();
-                networkStore.sendMove(targetIso.x, targetIso.y);
+                networkStore.sendMove(x, y);
 
                 this.moveNextStep();
             } else {

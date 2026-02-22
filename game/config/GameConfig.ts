@@ -146,7 +146,7 @@ export const ASSET_MANIFEST: Record<string, AssetDefinition> = {
         assetKey: 'tex_apple_tree',
         pixelHeight: 128,
         originX: 0.5,
-        originY: 0.82
+        originY: 0.95
     },
     'watering_can': {
         assetKey: 'tex_watering_can',

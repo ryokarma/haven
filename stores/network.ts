@@ -142,6 +142,10 @@ export const useNetworkStore = defineStore('network', () => {
         send('PLAYER_BUILD', { x, y, itemId });
     }
 
+    function sendHarvest(resource_id: string, equipped_tool: string = 'none') {
+        send('ACTION_HARVEST', { resource_id, tool: equipped_tool });
+    }
+
     // --- Listeners Auto ---
 
     function listenForWalletUpdates() {
@@ -194,6 +198,7 @@ export const useNetworkStore = defineStore('network', () => {
         sendMove,
         sendInteract,
         sendBuild,
+        sendHarvest,
         listenForWalletUpdates,
         listenForChatMessages,
         listenForErrors,

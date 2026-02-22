@@ -16,7 +16,7 @@ export const RENDER_OFFSETS: Record<string, { originX: number; originY: number; 
     // Alias serveur → même ancrage que clay_mound
     'clay_node': { originX: 0.5, originY: 0.6, offsetY: 0 },
     // Pommier → même ancrage que tree (même silhouette haute)
-    'apple_tree': { originX: 0.5, originY: 0.82, offsetY: 0 },
+    'apple_tree': { originX: 0.5, originY: 0.95, offsetY: 0 },
     'player': { originX: 0.5, originY: 1.0, offsetY: 0 },
     'clay_pot': { originX: 0.5, originY: 0.8, offsetY: 0 },
     'clay_pot_seeded': { originX: 0.5, originY: 0.8, offsetY: 0 },
@@ -34,6 +34,8 @@ export const RENDER_OFFSETS: Record<string, { originX: number; originY: number; 
 export class ObjectManager {
     private scene: Phaser.Scene;
     private objectMap: Map<string, Phaser.GameObjects.Image>;
+    /** Index serveur_id → sprite pour diffing O(1) au lieu de recréer tous les sprites. */
+    private serverObjectMap: Map<string, Phaser.GameObjects.Image> = new Map();
 
     // Joueurs distants (Multijoueur)
     public remotePlayers: Map<string, Phaser.GameObjects.Sprite> = new Map();
@@ -81,7 +83,7 @@ export class ObjectManager {
         // --- DEBUG VISUEL (CRITIQUE) ---
         // Point rouge à la position d'ancrage iso théorique
         // Permet de voir l'écart entre le point de pivot et le sprite
-        const SHOW_DEBUG = true; // Flag à passer à false pour la release
+        const SHOW_DEBUG = false; // Session 9.4 : désactivé pour le polish
         if (SHOW_DEBUG) {
             const debugDot = this.scene.add.circle(pos.x, pos.y, 3, 0xff0000);
             debugDot.setDepth(999999); // Toujours au-dessus
@@ -100,8 +102,10 @@ export class ObjectManager {
             // On va dire Depth 10. Les obstacles seront > y (qui est souvent > 0).
             obj.setDepth(1);
         } else {
-            // Obstacle / Objet Vertical
-            obj.setDepth(pos.y + (obj.height * 0.5) + (pos.x * 0.001));
+            // Obstacle / Objet Vertical — Profondeur basée sur la position au SOL (pos.y).
+            // Session 9.4 : Suppression du `height * 0.5` qui brisait le tri avec le joueur.
+            // Le tri isométrique repose uniquement sur y + x*epsilon, cohérent avec Player.
+            obj.setDepth(pos.y + (pos.x * 0.001));
         }
 
         obj.setInteractive({ cursor: 'pointer' });
@@ -253,72 +257,99 @@ export class ObjectManager {
     }
 
     /**
-     * Synchronise les objets du monde depuis l'état serveur.
-     * Nettoie tous les sprites NON placés par le joueur, puis recrée
-     * proprement chaque objet reçu. Empêche les doublons lors d'un reload.
+     * Synchronise les objets du monde depuis l'état serveur — ALGORITHME DE DIFF.
      *
-     * @param objects - Liste des ressources reçues via WORLD_STATE
-     * @param mapOriginX - Origine X de la carte isométrique
-     * @param mapOriginY - Origine Y de la carte isométrique
-     * @param onObjectPlaced - Callback optionnel appelé pour chaque objet placé
-     *                         (utile pour mettre à jour la grille de pathfinding)
+     * Au lieu de détruire et recréer tous les sprites à chaque WORLD_STATE, on :
+     *   1. Calcule les objets à supprimer (présents localement, absents du serveur)
+     *   2. Calcule les objets à ajouter   (absents localement, présents sur le serveur)
+     *   3. Les objets déjà présents sont conservés intacts (0 glitch visuel)
+     *
+     * @param objects       - Liste des ressources reçues via WORLD_STATE
+     * @param mapOriginX    - Origine X de la carte isométrique
+     * @param mapOriginY    - Origine Y de la carte isométrique
+     * @param onObjectPlaced  - Callback appelé pour chaque objet NOUVELLEMENT ajouté
+     * @param onObjectRemoved - Callback appelé pour chaque objet supprimé
      */
     syncWorldObjects(
         objects: ServerWorldObject[],
         mapOriginX: number,
         mapOriginY: number,
-        onObjectPlaced?: (obj: ServerWorldObject, isFloor: boolean) => void
+        onObjectPlaced?: (obj: ServerWorldObject, isFloor: boolean) => void,
+        onObjectRemoved?: (x: number, y: number) => void
     ): void {
-        console.log(`[ObjectManager] syncWorldObjects — ${objects.length} objet(s) à synchroniser.`);
+        // ── 1. Construire un Set des IDs reçus par le serveur ────────────────
+        const incomingIds = new Set<string>(objects.map(o => o.id));
 
-        // 1. Nettoyage des objets du monde existants (pas ceux placés par le joueur)
-        //    On itère sur une copie des clés pour éviter les mutations pendant le forEach
-        const keysToRemove: string[] = [];
-        this.objectMap.forEach((obj, key) => {
-            if (!obj.getData('isPlayerPlaced')) {
-                keysToRemove.push(key);
-            }
-        });
-        keysToRemove.forEach(key => {
-            const obj = this.objectMap.get(key);
-            if (obj) {
-                const light = obj.getData('light') as Phaser.GameObjects.Image | undefined;
-                if (light) light.destroy();
-                obj.destroy();
-                this.objectMap.delete(key);
+        // ── 2. Supprimer ceux qui ne sont plus dans le WORLD_STATE ────────────
+        const idsToRemove: string[] = [];
+        this.serverObjectMap.forEach((sprite, serverId) => {
+            if (!incomingIds.has(serverId)) {
+                idsToRemove.push(serverId);
             }
         });
 
-        // 2. Instanciation des objets depuis le serveur
+        idsToRemove.forEach(serverId => {
+            const sprite = this.serverObjectMap.get(serverId);
+            if (!sprite) return;
+
+            // Retirer de tous les indexes
+            const gx = sprite.getData('gridX') as number;
+            const gy = sprite.getData('gridY') as number;
+            const posKey = `${gx},${gy}`;
+
+            const light = sprite.getData('light') as Phaser.GameObjects.Image | undefined;
+            if (light) light.destroy();
+            sprite.destroy();
+
+            this.objectMap.delete(posKey);
+            this.serverObjectMap.delete(serverId);
+
+            // Libérer la cellule de pathfinding
+            if (onObjectRemoved) onObjectRemoved(gx, gy);
+        });
+
+        if (idsToRemove.length > 0) {
+            console.log(`[ObjectManager] Diff — ${idsToRemove.length} objet(s) supprimé(s).`);
+        }
+
+        // ── 3. Ajouter uniquement les nouveaux objets ─────────────────────────
+        let addedCount = 0;
         objects.forEach(res => {
-            // Clé de collision pour éviter les doublons résiduels
-            const key = `${res.x},${res.y}`;
-            if (this.objectMap.has(key)) {
-                console.warn(`[ObjectManager] Doublon ignoré à la position ${key} (type: ${res.asset || res.type}).`);
+            // Déjà présent ? On ne touche à rien (conservation de l'état visuel)
+            if (this.serverObjectMap.has(res.id)) return;
+
+            const posKey = `${res.x},${res.y}`;
+            if (this.objectMap.has(posKey)) {
+                // Position prise par un objet local (ex: construction joueur) — on ignore
                 return;
             }
 
-            // Le champ 'asset' contient le nom du sprite (ex: "tree"), 'type' est le rôle ("obstacle")
             const spriteKey = res.asset || res.type;
 
-            this.placeObject(
+            const sprite = this.placeObject(
                 res.x,
                 res.y,
                 spriteKey,
                 mapOriginX,
                 mapOriginY,
-                false,      // isPlayerPlaced = false (vient du serveur)
-                res.id      // server_id pour les suppressions futures
+                false,   // isPlayerPlaced = false
+                res.id   // server_id
             );
 
-            // Callback pour mettre à jour la grille (ex: pathfinding)
+            // Enregistrer dans l'index server_id pour diffing futur
+            this.serverObjectMap.set(res.id, sprite);
+            addedCount++;
+
+            // Callback pathfinding
             if (onObjectPlaced) {
                 const isFloor = res.type === 'floor' || spriteKey.includes('path');
                 onObjectPlaced(res, isFloor);
             }
         });
 
-        console.log(`[ObjectManager] Synchronisation terminée. ${this.objectMap.size} objet(s) total dans la scène.`);
+        if (addedCount > 0) {
+            console.log(`[ObjectManager] Diff — ${addedCount} objet(s) ajouté(s). Total: ${this.serverObjectMap.size} objets serveur.`);
+        }
     }
 
     /**

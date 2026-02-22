@@ -32,7 +32,7 @@ export class Player {
         this.sprite.setDepth(this.sprite.y + (this.sprite.x * 0.001));
 
         // --- DEBUG VISUEL ---
-        const SHOW_DEBUG = true;
+        const SHOW_DEBUG = false; // Session 9.4 : désactivé pour le polish
         if (SHOW_DEBUG) {
             const debugDot = scene.add.circle(pos.x, pos.y, 3, 0xff0000);
             debugDot.setDepth(999999);

@@ -221,27 +221,26 @@ export class MapManager {
      * @param resources - Liste des ressources reçues du serveur
      */
     public populateFromState(resources: any[]): void {
-        console.log(`[MapManager] populateFromState — ${resources.length} ressource(s) à instancier.`);
+        console.log(`[MapManager] populateFromState (diff) — ${resources.length} ressource(s) dans l'état serveur.`);
 
-        // Réinitialise les tiles occupées par des ressources serveur
-        // (les objets placés par le joueur sont gérés séparément)
-        this.occupiedTiles.clear();
-
-        // Délégation à ObjectManager : nettoyage + instanciation des sprites
+        // Délégation au Diffing de ObjectManager.
+        // Avec le nouveau système, on ne vide plus tout : on passe deux callbacks ciblés.
         this.objectManager.syncWorldObjects(
             resources,
             this.mapOriginX,
             this.mapOriginY,
-            // Callback : mise à jour grille de collision pour chaque objet créé
+            // onObjectPlaced : mise à jour collision pour les NOUVEAUX objets uniquement
             (res, _isFloorFromSync) => {
-                // On recalcule via notre helper pour garantir la cohérence
                 const floor = this.isFloorAsset(res.asset, res.type);
                 this.updateCell(res.x, res.y, floor ? 0 : 1);
                 this.occupiedTiles.add(`${res.x},${res.y}`);
+            },
+            // onObjectRemoved : libération collision pour les objets SUPPRIMÉS uniquement
+            (x, y) => {
+                this.updateCell(x, y, 0);
+                this.occupiedTiles.delete(`${x},${y}`);
             }
         );
-
-        console.log(`[MapManager] Grille de collision mise à jour. ${this.occupiedTiles.size} tuile(s) occupée(s).`);
     }
 
     /**

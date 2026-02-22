@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — Haven
 
 > **État du projet : MVP Fonctionnel (Alpha 0.1)**
-> Dernière mise à jour : 20/02/2026
+> Dernière mise à jour : 22/02/2026
 
 ---
 
@@ -74,7 +74,8 @@
 | Message               | Payload                    | Description                    |
 |-----------------------|----------------------------|--------------------------------|
 | `PLAYER_MOVE`         | `{ x, y }`                | Destination de déplacement     |
-| `PLAYER_INTERACT`     | `{ x, y }`                | Récolte / Interaction          |
+| `PLAYER_INTERACT`     | `{ x, y }`                | Récolte / Interaction (Legacy) |
+| `ACTION_HARVEST`      | `{ resource_id }`         | Demande explicite de récolte d'une entité du serveur |
 | `PLAYER_BUILD`        | `{ x, y, itemId }`        | Construction d'un objet        |
 | `PLAYER_CHAT`         | `{ text }`                 | Message de chat                |
 | `REQUEST_WORLD_STATE` | `{}`                       | Handshake : demande l'état du monde (envoyé quand la scène est prête) |
@@ -185,3 +186,10 @@
 | 8.2     | 20/02/2026 | Rétablissement du rendu des objets via la synchronisation Server->Client |
 | 8.3     | 20/02/2026 | Implémentation du Handshake REQUEST_WORLD_STATE pour corriger la Race Condition au chargement des objets |
 | 8.4     | 20/02/2026 | Migration de la génération procédurale riche (Arbres, Rochers, Coton, Argile, Pommiers) vers le Backend Python et mapping des placeholders visuels |
+| 9.1     | 20/02/2026 | Création boucle ACTION_HARVEST (Client -> Serveur) et validation distance + loot |
+| 9.2     | 20/02/2026 | Synchronisation du Wallet (Serveur -> Pinia) et ajout des textes flottants de récolte in-game |
+| 9.3     | 21/02/2026 | Fix du Lag (Diffing au lieu de Re-render complet), attente de fin de pathfinding pour récolter, et logique spécifique pour les pommiers |
+| **9.4** | **22/02/2026** | **Grand Nettoyage & Deep Polish** — (1) Fix Rubberbanding : PLAYER_SYNC ignoré pendant le mouvement. (2) Z-Sorting unifié : formule depth cohérente Player/Objets. (3) Récolte fixée : sendMove envoie coords GRILLE (plus ISO), fix mismatch distance serveur + ajout alias clay_node. (4) Apple_tree ancré au sol (originY 0.82→0.95). (5) Ressources hors eau : Perlin côté serveur (perlin.py) filtre les tuiles d'eau lors de la génération. Debug dots désactivés. |
+| 9.5 | 22/02/2026 | Résolution des spawns de ressources sur l'eau (synchronisation via LCG déterministe) et réparation du flux de récolte avec validation des outils équipés (transmission au serveur) |
+| 9.6 | 22/02/2026 | Alignement des IDs d'outils (Front/Back) pour la récolte et ajout de feedbacks visuels en cas de rejet d'action par le serveur |
+| 9.7 | 23/02/2026 | Fix du pathfinding de récolte : gestion des cibles solides et déclenchement immédiat (sans mouvement) si le joueur est adjacent, plus feedback local si la distance est trop grande |

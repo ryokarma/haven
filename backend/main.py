@@ -152,7 +152,60 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     y=y
                 ), exclude_id=client_id)
 
-            # ──────────── PLAYER_INTERACT (Récolte) ────────────
+            # ──────────── ACTION_HARVEST (Récolte Serveur) ────────────
+            elif msg_type == "ACTION_HARVEST":
+                resource_id = payload.get("resource_id")
+                equipped_tool = payload.get("tool", "none")
+                
+                if not resource_id:
+                    await websocket.send_text(make_msg("ERROR", message="resource_id manquant"))
+                    continue
+
+                harvest_result = gameState.harvest_resource(client_id, resource_id, equipped_tool, userManager)
+
+                if isinstance(harvest_result, str):
+                    # Refus avec motif précis généré par gameState
+                    await websocket.send_text(make_msg("ERROR", message=harvest_result))
+                    continue
+                elif harvest_result is None:
+                    # Fallback sécurité
+                    await websocket.send_text(make_msg("ERROR", message="Récolte impossible (erreur inconnue)"))
+                    continue
+
+                affected_res, new_wallet, loot_dict = harvest_result
+
+                # ── Wallet update (ciblé uniquement sur le joueur) ──
+                if new_wallet:
+                    await websocket.send_text(make_msg("WALLET_UPDATE", payload=new_wallet))
+
+                # ── Feedback visuel (floating text) ──
+                await websocket.send_text(make_msg(
+                    "HARVEST_SUCCESS",
+                    x=affected_res["x"],
+                    y=affected_res["y"],
+                    loot=loot_dict
+                ))
+
+                # ── Cas spécial : apple_tree — l'arbre n'est PAS supprimé ──
+                is_apple_tree = affected_res.get("asset") == "apple_tree"
+                if not is_apple_tree:
+                    # Cas normal : la ressource a été retirée du monde
+                    # Diffuse le nouveau WORLD_STATE à TOUS les clients (diff côté client)
+                    await manager.broadcast(make_msg(
+                        "WORLD_STATE",
+                        payload=gameState.get_full_state()
+                    ))
+                    # Compatibilité legacy : signal de suppression explicite
+                    await manager.broadcast(make_msg(
+                        "RESOURCE_REMOVED",
+                        id=affected_res["id"],
+                        x=affected_res["x"],
+                        y=affected_res["y"]
+                    ))
+                # Sinon pour apple_tree : on ne fait rien de plus,
+                # l'arbre reste dans le WORLD_STATE, aucun WORLD_STATE à rebrod.
+                    
+            # ──────────── PLAYER_INTERACT (Legacy Récolte) ────────────
             elif msg_type == "PLAYER_INTERACT":
                 x = payload.get("x")
                 y = payload.get("y")

@@ -5,26 +5,25 @@ export class Perlin {
         this.init(rnd);
     }
 
-    /**
-     * Initialise la table de permutation avec le générateur aléatoire
-     */
     public init(rnd: Phaser.Math.RandomDataGenerator): void {
-        // Initialisation sécurisée
+        // Enforce deterministic seed to match backend WORLD_SEED (42) exactly
+        let state = 42;
         const p: number[] = new Array(256).fill(0).map((_, i) => i);
 
-        // Shuffle (Fisher-Yates) avec le RNG de Phaser
+        // Fisher-Yates avec LCG basique identique au serveur Python
         for (let i = 255; i > 0; i--) {
-            const j = Math.floor(rnd.realInRange(0, i + 1));
-            // Échange sécurisé
-            const temp = p[i];
-            p[i] = p[j];
+            state = (state * 1664525 + 1013904223) >>> 0;
+            const randVal = state / 0x100000000;
+            const j = Math.floor(randVal * (i + 1));
+
+            const temp = p[i] as number;
+            p[i] = p[j] as number;
             p[j] = temp;
         }
 
         // Double la table pour éviter les débordements
         this.perm = [];
         for (let i = 0; i < 512; i++) {
-            // p[i & 255] est garanti d'exister par la logique ci-dessus
             this.perm[i] = p[i & 255] as number;
         }
     }

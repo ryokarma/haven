@@ -8,7 +8,10 @@ La carte 100x100 est peuplée aléatoirement avec une seed fixe pour la reproduc
 
 import time
 import random
-from typing import List, Dict, Any, Optional
+import math
+from typing import List, Dict, Any, Optional, Set, Union
+
+from backend.perlin import Perlin
 
 
 # ─────────────────── Configuration Génération ───────────────────
@@ -39,8 +42,11 @@ GENERATION_RULES = [
 ]
 
 # Seed de génération — utiliser une valeur fixe pour que tous les clients voient la même carte.
-# Peut être externalisé dans une config ou un paramètre de lancement.
 WORLD_SEED = 42
+
+# Paramètres Perlin pour le terrain (eau) — DOIVENT correspondre à GameConfig.MAP_GENERATION.noise
+PERLIN_SCALE = 0.04
+WATER_THRESHOLD = 0.3
 
 
 # ─────────────────── Helpers ───────────────────
@@ -57,16 +63,49 @@ def _is_in_house(x: int, y: int) -> bool:
             HOUSE_Y <= y < HOUSE_Y + HOUSE_H)
 
 
+def _compute_water_tiles(seed: int) -> Set[tuple]:
+    """
+    Pré-calcule l'ensemble des tuiles d'eau via Perlin Noise.
+    Reproduit la logique du MapManager.generateTerrain() côté client.
+
+    Session 9.4 : Évite de placer des ressources sur l'eau.
+    """
+    perlin = Perlin(seed)
+    water_tiles: Set[tuple] = set()
+
+    for y in range(MAP_SIZE):
+        for x in range(MAP_SIZE):
+            # Zone protégée (maison)
+            if _is_in_house(x, y):
+                continue
+            # Zone de départ protégée (pas d'eau au spawn — même logique que le client)
+            if x < 10 and y < 10:
+                continue
+
+            noise_value = perlin.noise(x * PERLIN_SCALE, y * PERLIN_SCALE)
+            normalized = (noise_value + 1) / 2
+
+            if normalized < WATER_THRESHOLD:
+                water_tiles.add((x, y))
+
+    print(f"[GameState] Terrain calculé : {len(water_tiles)} tuile(s) d'eau détectée(s).")
+    return water_tiles
+
+
 def _generate_world(seed: int) -> List[Dict[str, Any]]:
     """
     Génère la liste des ressources du monde avec une seed déterministe.
 
     Algorithme :
+    - Pré-calcule les tuiles d'eau via Perlin (session 9.4)
     - Parcourt chaque case de la grille 100x100
-    - Skip les zones protégées (spawn + maison)
+    - Skip les zones protégées (spawn + maison + eau)
     - Applique les règles de génération en cascade (tirage unique par case)
     - Retourne une liste compacte de dicts {id, asset, type, x, y}
     """
+    # Pré-calcul des tuiles d'eau
+    water_tiles = _compute_water_tiles(seed)
+
     rng = random.Random(seed)
     resources: List[Dict[str, Any]] = []
 
@@ -80,6 +119,10 @@ def _generate_world(seed: int) -> List[Dict[str, Any]]:
 
             # Skip zones protégées
             if _is_in_safe_zone(x, y) or _is_in_house(x, y):
+                continue
+
+            # Session 9.4 : Skip les tuiles d'eau
+            if (x, y) in water_tiles:
                 continue
 
             # Tirage unique pour cette case
@@ -142,6 +185,96 @@ class GameState:
             except ValueError:
                 pass  # Déjà absent — incohérence ignorée silencieusement
         return res
+
+    def harvest_resource(self, player_id: str, resource_id: str, equipped_tool: str, user_manager: Any) -> Optional[Union[tuple[Dict[str, Any], Dict[str, int], Dict[str, int]], str]]:
+        """
+        Gère la logique de récolte côté serveur (autorité serveur).
+
+        Validations :
+        1. La ressource doit exister dans le monde.
+        2. La distance joueur ↔ ressource doit être ≤ 3 cases (grille).
+        3. Vérifie l'outil équipé transmis par le client (Session 9.5 & 9.6).
+
+        Comportements spéciaux :
+        - apple_tree : donne une pomme mais NE DÉTRUIT PAS l'arbre.
+        - Autres : détruit la ressource et donne le loot correspondant.
+
+        Retourne un tuple (resource_affectée, nouveau_wallet, loot) ou une string erreur si refus.
+        """
+        import math
+
+        # ── Trouver le joueur ──────────────────────────────────────────────────
+        user = user_manager.get_or_create_user(player_id)
+        # Les coordonnées stockées dans l'UserManager sont en grille isométrique (cases)
+        # PLAYER_MOVE envoie les coords grille depuis MainScene → update_user_position
+        px = float(user.get("x", 0))
+        py = float(user.get("y", 0))
+
+        # ── Trouver la ressource ───────────────────────────────────────────────
+        target = next((r for r in self.resources if r["id"] == resource_id), None)
+        if not target:
+            print(f"[GameState] Récolte refusée pour {player_id}: ressource '{resource_id}' introuvable.")
+            return "Ressource introuvable."
+
+        rx, ry = float(target["x"]), float(target["y"])
+        asset  = target.get("asset", "")
+
+        # ── Validation distance stricte (≤ 3 cases) ───────────────────────────
+        dist = math.hypot(px - rx, py - ry)
+        MAX_HARVEST_DIST = 3.0
+        if dist > MAX_HARVEST_DIST:
+            print(f"[GameState] Récolte refusée pour {player_id}: trop loin "
+                  f"(player=({px:.1f},{py:.1f}), resource=({rx},{ry}), dist={dist:.2f}).")
+            return "Cible trop éloignée."
+
+        # ── Vérification de l'outil équipé (Session 9.5) ──────────────────────
+        if asset == "tree" and equipped_tool != "axe":
+            print(f"[GameState] Récolte refusée pour {player_id} : 'axe' requis, '{equipped_tool}' reçu.")
+            return "Outil inadapté. Hache requise."
+        if asset == "rock" and equipped_tool != "pickaxe":
+            print(f"[GameState] Récolte refusée pour {player_id} : 'pickaxe' requis, '{equipped_tool}' reçu.")
+            return "Outil inadapté. Pioche requise."
+        if asset in ["clay_node", "clay_mound"] and equipped_tool != "shovel":
+            print(f"[GameState] Récolte refusée pour {player_id} : 'shovel' requis, '{equipped_tool}' reçu.")
+            return "Outil inadapté. Pelle requise."
+        # cotton_bush peut être récolté avec gants ou knife, ce qui rend la validation difficile
+        # si on ne passe qu'un seul outil depuis le client. Pour le MVP, on se fie au client pour cotton_bush.
+
+        # ── Comportement SPÉCIAL : Pommier (sans destruction) ─────────────────
+        if asset == "apple_tree":
+            loot = {"apple": 1}
+            new_wallet = None
+            for res_type, amount in loot.items():
+                new_wallet = user_manager.update_wallet(player_id, res_type, amount)
+            print(f"[GameState] {player_id} récolte une pomme sur l'apple_tree {resource_id}.")
+            # On retourne l'arbre lui-même (non supprimé) comme référence de position
+            return target, new_wallet or {}, loot
+
+        # ── Suppression de la ressource du monde ──────────────────────────────
+        removed = self.remove_resource_at(int(rx), int(ry))
+        if not removed:
+            return "Erreur lors de la suppression de la ressource."
+
+        # ── Table de loot ──────────────────────────────────────────────────────
+        loot: Dict[str, int] = {}
+        if asset == "tree":
+            loot = {"wood": 1}
+        elif asset == "rock":
+            loot = {"stone": 1}
+        elif asset == "clay_node":
+            loot = {"stone": 1}   # raw_clay traité en stone pour l'économie serveur MVP
+        elif asset == "cotton_bush":
+            loot = {"cotton_plant": 1}
+        else:
+            loot = {"wood": 1}   # Fallback générique
+
+        # ── Mise à jour du wallet ──────────────────────────────────────────────
+        new_wallet = None
+        for res_type, amount in loot.items():
+            new_wallet = user_manager.update_wallet(player_id, res_type, amount)
+
+        print(f"[GameState] {player_id} récolte {loot} sur '{asset}' ({resource_id}).")
+        return removed, new_wallet or {}, loot
 
     def add_resource(self, asset: str, obj_type: str, x: int, y: int) -> Optional[Dict[str, Any]]:
         """
