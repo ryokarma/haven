@@ -29,6 +29,13 @@ export class InputManager {
     private dragStartY: number = 0;
     private readonly DRAG_THRESHOLD = 5;
 
+    // ── Session 9.8 : Anti-double-fire ──
+    // Quand `gameobjectup` intercepte un clic sur une ressource,
+    // on empêche `pointerup` (qui fire juste après) d'émettre aussi `tile-clicked`.
+    // Sans ce flag, le clic envoie SIMULTANÉMENT resource-clicked ET tile-clicked,
+    // ce dernier tentant un startMove vers la case solide → échec silencieux.
+    private _resourceClickHandled: boolean = false;
+
     constructor(scene: Phaser.Scene, mapOriginX: number, mapOriginY: number) {
         this.scene = scene;
         this.mapOriginX = mapOriginX;
@@ -85,6 +92,12 @@ export class InputManager {
                 return;
             }
 
+            // ── Session 9.8 : skip si gameobjectup a déjà traité ce clic ──
+            if (this._resourceClickHandled) {
+                this._resourceClickHandled = false;
+                return;
+            }
+
             // Sinon, c'est un Clic
             this.handleClick(pointer);
         });
@@ -96,23 +109,26 @@ export class InputManager {
 
         // Support spécial pour les GameObjects interactifs (si besoin spécifique)
         this.scene.input.on('gameobjectup', (pointer: Phaser.Input.Pointer, gameObject: Phaser.GameObjects.GameObject) => {
+            // ── Session 9.8 : Skip si c'était un drag ──
+            if (this.isDragging) return;
+
             const serverId = gameObject.getData('server_id');
             const type = gameObject.getData('type');
             const gridX = gameObject.getData('gridX') as number;
             const gridY = gameObject.getData('gridY') as number;
 
-            // Si le clic intercepte une ressource récoltable avec un ID serveur défini,
-            // on émet un événement sémantique plutôt que d'envoyer ACTION_HARVEST immédiatement.
-            // MainScene.ts se chargera de lancer le pathfinding, puis d'envoyer l'action
-            // une fois le joueur arrivé à destination (in the `pendingAction` callback).
             if (serverId && ['tree', 'rock', 'cotton_bush', 'clay_node', 'apple_tree'].includes(type)) {
+                // ── Session 9.8 : Anti-double-fire ──
+                // Empêche le `pointerup` suivant d'émettre aussi un `tile-clicked`
+                this._resourceClickHandled = true;
+
                 this.events.emit('resource-clicked', {
                     serverId,
                     type,
                     x: gridX,
                     y: gridY,
                 });
-                console.log(`[InputManager] Clic sur ressource ${type} (id: ${serverId}) → pathfinding requis.`);
+                console.log(`[InputManager] Clic sur ressource ${type} (id: ${serverId}) à (${gridX},${gridY}).`);
             }
         });
     }

@@ -657,22 +657,75 @@ export class MainScene extends Scene {
         const playerPos = this.player.getGridPosition();
         const dist = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, targetX, targetY);
 
-        // Vérification Globale de Distance pour la récolte
-        if (dist > 1.5) {
-            const objectPos = IsoMath.gridToIso(targetX, targetY, this.mapOriginX, this.mapOriginY);
-            this.showFloatingText(objectPos.x, objectPos.y - 50, "Trop loin !", "#ef4444");
+        // ── Session 9.8 : Log de debug pour tracer le flux ──
+        console.log(`[MainScene] handleHarvestIntent: target=(${targetX},${targetY}), player=(${playerPos.x},${playerPos.y}), dist=${dist.toFixed(2)}, object=${object ? object.getData('type') : 'null'}`);
+
+        // ── A) Le joueur est ADJACENT (dist <= 1.5) → exécution immédiate ──
+        if (dist <= 1.5) {
+            this.executeHarvestOrInteract(targetX, targetY, object);
             return;
         }
 
+        // ── B) Le joueur est LOIN → trouver une case adjacente marchable et pathfind ──
+        const gridData = this.mapManager.gridData;
+        const neighbors = [
+            { x: targetX + 1, y: targetY },
+            { x: targetX - 1, y: targetY },
+            { x: targetX, y: targetY + 1 },
+            { x: targetX, y: targetY - 1 },
+            { x: targetX + 1, y: targetY + 1 },
+            { x: targetX + 1, y: targetY - 1 },
+            { x: targetX - 1, y: targetY + 1 },
+            { x: targetX - 1, y: targetY - 1 }
+        ];
+
+        // Filtrer les cases marchables (cellType === 0 = herbe/vide)
+        const validNeighbors = neighbors.filter(n =>
+            this.isValidTile(n.x, n.y) &&
+            gridData[n.y]?.[n.x] === 0
+        );
+
+        if (validNeighbors.length === 0) {
+            const objectPos = IsoMath.gridToIso(targetX, targetY, this.mapOriginX, this.mapOriginY);
+            this.showFloatingText(objectPos.x, objectPos.y - 50, "Inaccessible !", "#ef4444");
+            console.warn(`[MainScene] Aucune case adjacente marchable pour (${targetX},${targetY}).`);
+            return;
+        }
+
+        // Trier par proximité au joueur
+        validNeighbors.sort((a, b) => {
+            const d1 = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, a.x, a.y);
+            const d2 = Phaser.Math.Distance.Between(playerPos.x, playerPos.y, b.x, b.y);
+            return d1 - d2;
+        });
+
+        const bestSpot = validNeighbors[0]!;
+        console.log(`[MainScene] Pathfinding vers case adjacente (${bestSpot.x},${bestSpot.y}) pour atteindre la cible (${targetX},${targetY}).`);
+
+        // Lancer le pathfinding, et exécuter la récolte à l'arrivée
+        this.startMove(bestSpot.x, bestSpot.y, () => {
+            // Re-vérifier la distance après arrivée (sécurité)
+            const newDist = Phaser.Math.Distance.Between(bestSpot.x, bestSpot.y, targetX, targetY);
+            if (newDist <= 1.5) {
+                this.executeHarvestOrInteract(targetX, targetY, this.objectManager.getObject(targetX, targetY));
+            } else {
+                console.warn(`[MainScene] Arrivé mais toujours trop loin (${newDist.toFixed(2)}).`);
+            }
+        });
+    }
+
+    /**
+     * Exécute l'interaction/récolte quand le joueur est déjà adjacent.
+     * Factorisé depuis handleHarvestIntent pour éviter la duplication.
+     */
+    private executeHarvestOrInteract(targetX: number, targetY: number, object: Phaser.GameObjects.Image | undefined): void {
         // Interaction : Plantation (Pot vide + Graine)
         if (object && object.getData('type') === 'clay_pot') {
             const mainHand = this.playerStore.equipment.mainHand;
             if (mainHand && mainHand.name === 'cotton_seeds') {
-                // Consommer la graine (Déséquiper -> Retirer 1)
                 this.playerStore.unequipItem('mainHand');
                 this.playerStore.removeItem('cotton_seeds', 1);
 
-                // Remplacer l'objet
                 const tx = object.getData('gridX');
                 const ty = object.getData('gridY');
                 this.objectManager.removeObject(tx, ty);
@@ -680,8 +733,6 @@ export class MainScene extends Scene {
                 const seededPot = this.objectManager.placeObject(tx, ty, 'clay_pot_seeded', this.mapOriginX, this.mapOriginY, true);
                 seededPot.setName('Pot (Semis)');
                 seededPot.setData('type', 'clay_pot_seeded');
-
-                // Obstacle
                 this.mapManager.updateCell(tx, ty, 1);
 
                 this.showFloatingText(object.x, object.y - 50, "Planté !", "#4ade80");
@@ -693,7 +744,6 @@ export class MainScene extends Scene {
         if (object && object.getData('type') === 'clay_pot_seeded') {
             const mainHand = this.playerStore.equipment.mainHand;
             if (mainHand && mainHand.name === 'watering_can') {
-                // Arroser
                 const tx = object.getData('gridX');
                 const ty = object.getData('gridY');
                 this.objectManager.removeObject(tx, ty);
@@ -712,7 +762,6 @@ export class MainScene extends Scene {
         if (object && object.getData('type') === 'clay_pot_ready') {
             const accessory = this.playerStore.equipment.accessory;
             if (accessory?.name === 'gloves') {
-                // Récolte
                 const nbPlants = Phaser.Math.Between(2, 4);
                 const nbSeeds = Phaser.Math.Between(1, 2);
 
@@ -723,7 +772,6 @@ export class MainScene extends Scene {
                 const ty = object.getData('gridY');
                 this.objectManager.removeObject(tx, ty);
 
-                // Reset to empty pot
                 const pot = this.objectManager.placeObject(tx, ty, 'clay_pot', this.mapOriginX, this.mapOriginY, true);
                 pot.setName('Pot en argile');
                 pot.setData('type', 'clay_pot');
@@ -737,17 +785,8 @@ export class MainScene extends Scene {
             }
         }
 
-        // Interaction spéciale : Pommier (sans détruire l'arbre) - Côté Client Fallback
-        // (La récolte réelle et la récompense se font côté Serveur via harvestResource)
-        if (object && object.getData('subType') === 'apple_tree') {
-            // Note: On pourrait traiter l'apple_tree comme une ressource serveurs classique 
-            // The object will just pass through to harvestResource below!
-            // which will send ACTION_HARVEST, and the server calculates loot.
-            // On laisse donc `harvestResource` s'en occuper.
-        }
-
-        // Récolte Générique (Arbres, Rochers, etc + Pommiers)
-        // Déclenchement immédiat puisque la distance <= 1.5
+        // Récolte Générique (Arbres, Rochers, Pommiers, etc.)
+        // Délègue au serveur via harvestResource
         this.harvestResource(targetX, targetY);
     }
 

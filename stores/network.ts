@@ -46,10 +46,15 @@ export const useNetworkStore = defineStore('network', () => {
             const parsed = JSON.parse(data);
             lastPing.value = Date.now();
 
+            // ── Session 9.8 : Log des messages reçus pour le debug ──
+            if (parsed.type === 'ERROR') {
+                console.warn(`[Network] ← ERROR du serveur: ${parsed.message}`);
+            }
+
             // Dispatch aux listeners enregistrés
             onMessageCallbacks.value.forEach(cb => cb(parsed));
         } catch (e) {
-            // Ignore les erreurs de parsing (ex: ping simple string)
+            console.warn('[Network] Message non-JSON reçu (ping?):', data?.substring?.(0, 50));
         }
     }
 
@@ -143,6 +148,7 @@ export const useNetworkStore = defineStore('network', () => {
     }
 
     function sendHarvest(resource_id: string, equipped_tool: string = 'none') {
+        console.log(`[Network] → ACTION_HARVEST: resource_id=${resource_id}, tool=${equipped_tool}`);
         send('ACTION_HARVEST', { resource_id, tool: equipped_tool });
     }
 

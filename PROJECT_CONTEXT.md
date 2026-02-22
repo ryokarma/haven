@@ -75,7 +75,7 @@
 |-----------------------|----------------------------|--------------------------------|
 | `PLAYER_MOVE`         | `{ x, y }`                | Destination de déplacement     |
 | `PLAYER_INTERACT`     | `{ x, y }`                | Récolte / Interaction (Legacy) |
-| `ACTION_HARVEST`      | `{ resource_id }`         | Demande explicite de récolte d'une entité du serveur |
+| `ACTION_HARVEST`      | `{ resource_id, tool }`  | Demande explicite de récolte (tool = toolType équipé) |
 | `PLAYER_BUILD`        | `{ x, y, itemId }`        | Construction d'un objet        |
 | `PLAYER_CHAT`         | `{ text }`                 | Message de chat                |
 | `REQUEST_WORLD_STATE` | `{}`                       | Handshake : demande l'état du monde (envoyé quand la scène est prête) |
@@ -193,3 +193,4 @@
 | 9.5 | 22/02/2026 | Résolution des spawns de ressources sur l'eau (synchronisation via LCG déterministe) et réparation du flux de récolte avec validation des outils équipés (transmission au serveur) |
 | 9.6 | 22/02/2026 | Alignement des IDs d'outils (Front/Back) pour la récolte et ajout de feedbacks visuels en cas de rejet d'action par le serveur |
 | 9.7 | 23/02/2026 | Fix du pathfinding de récolte : gestion des cibles solides et déclenchement immédiat (sans mouvement) si le joueur est adjacent, plus feedback local si la distance est trop grande |
+| 9.8 | 23/02/2026 | Audit Fullstack : Fix de la race condition double-fire (gameobjectup/pointerup), restauration du pathfinding adjacent pour les cibles solides, typage strict des payloads réseau et ajout de logs de debug sur toute la chaîne |

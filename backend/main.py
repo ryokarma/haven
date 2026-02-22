@@ -156,6 +156,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
             elif msg_type == "ACTION_HARVEST":
                 resource_id = payload.get("resource_id")
                 equipped_tool = payload.get("tool", "none")
+                print(f"[WS] ACTION_HARVEST reçu de {client_id}: resource_id={resource_id}, tool={equipped_tool}")
                 
                 if not resource_id:
                     await websocket.send_text(make_msg("ERROR", message="resource_id manquant"))
