@@ -92,51 +92,51 @@ export const usePlayerStore = defineStore('player', {
             {
                 id: 'campfire',
                 name: 'Feu de Camp',
-                inputs: { 'Bois': 5, 'Pierre': 5 },
+                inputs: { 'wood': 5, 'stone': 5 },
                 output: { name: 'Kit de Feu de Camp', count: 1 }
             },
             {
                 id: 'stone_axe',
                 name: 'Hache en pierre',
-                inputs: { 'Bois': 10, 'Pierre': 5 },
+                inputs: { 'wood': 10, 'stone': 5 },
                 output: { name: 'Hache en pierre', count: 1 }
             },
             {
                 id: 'craft_knife',
                 name: 'Couteau en silex',
-                inputs: { 'Bois': 1, 'Pierre': 1 },
+                inputs: { 'wood': 1, 'stone': 1 },
                 output: { name: 'tool_knife', count: 1 }
             },
             {
                 id: 'craft_pickaxe',
                 name: 'Pioche en pierre',
-                inputs: { 'Bois': 2, 'Pierre': 2 },
+                inputs: { 'wood': 2, 'stone': 2 },
                 output: { name: 'tool_pickaxe', count: 1 }
             },
             {
                 id: 'craft_shovel',
                 name: 'Pelle rudimentaire',
-                inputs: { 'Bois': 2, 'Pierre': 1 },
+                inputs: { 'wood': 2, 'stone': 1 },
                 output: { name: 'tool_shovel', count: 1 }
             },
             // --- NOUVELLES RECETTES ---
             {
                 id: 'craft_furnace',
                 name: 'Four en pierre',
-                inputs: { 'Pierre': 10 },
+                inputs: { 'stone': 10 },
                 output: { name: 'furnace', count: 1 }
             },
             {
                 id: 'craft_clay_pot',
                 name: 'Pot en argile',
-                inputs: { 'raw_clay': 2, 'Bois': 1 },
+                inputs: { 'raw_clay': 2, 'wood': 1 },
                 output: { name: 'clay_pot', count: 1 },
                 station: 'furnace'
             },
             {
                 id: 'craft_watering_can',
                 name: 'Arrosoir',
-                inputs: { 'raw_clay': 2, 'Bois': 2 },
+                inputs: { 'raw_clay': 2, 'wood': 2 },
                 output: { name: 'watering_can', count: 1 },
                 station: 'furnace'
             }
@@ -307,40 +307,23 @@ export const usePlayerStore = defineStore('player', {
             }
         },
 
-        // Action de Crafting
-        craftItem(recipeId: string): boolean {
+        // Action de Crafting (Deleguée au backend via UI)
+        // Ne gère plus que les validations locales (station) pour éviter d'envoyer
+        // des requêtes inutiles au serveur si on n'est pas prêt d'une station
+        validateCraftStation(recipeId: string): boolean {
             const recipe = this.recipes.find(r => r.id === recipeId);
             if (!recipe) {
                 console.error(`[Store] Recette ${recipeId} introuvable`);
                 return false;
             }
 
-            // 0. Vérification de la station requise
+            // Vérification de la station requise
             if (recipe.station) {
                 if (!this.nearbyStations.includes(recipe.station)) {
                     this.lastActionFeedback = `Nécessite ${recipe.station} à proximité !#${Date.now()}`;
                     return false;
                 }
             }
-
-            // 1. Vérification des ressources
-            for (const [ingredientName, requiredCount] of Object.entries(recipe.inputs)) {
-                const item = this.inventory.find(i => i.name === ingredientName);
-                if (!item || item.count < requiredCount) {
-                    return false;
-                }
-            }
-
-            // 2. Consommation des ressources
-            for (const [ingredientName, requiredCount] of Object.entries(recipe.inputs)) {
-                this.removeItem(ingredientName, requiredCount);
-            }
-
-            // 3. Ajout de l'item produit
-            this.addItem(recipe.output.name, recipe.output.count);
-
-            // Feedback
-            this.lastActionFeedback = `Fabriqué : ${recipe.output.name} !#${Date.now()}`;
             return true;
         },
 

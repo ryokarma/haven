@@ -238,17 +238,16 @@ export class MainScene extends Scene {
 
         // --- MULTIJOUEUR ---
         const networkStore = useNetworkStore();
-        networkStore.listenForWalletUpdates(); // Start listening for economy
+        networkStore.listenForEconomy(); // Start listening for economy and craft success
         networkStore.listenForErrors(); // Start listening for server errors
 
         // Abonnement aux messages
         networkStore.onMessage((msg: any) => {
             if (msg.type === 'PLAYER_JOINED') {
-                // Spawn new player
-                // Default specific coordinates for now: 200, 200 (screen space, temporary)
-                // We will simply use 10,10 grid coordinates converted to iso for stability
-                const spawnGrid = { x: 10, y: 10 };
-                const isoPos = IsoMath.gridToIso(spawnGrid.x, spawnGrid.y, this.mapOriginX, this.mapOriginY);
+                // Le serveur envoie maintenant msg.x et msg.y en coordonnées GRILLE.
+                const spawnGridX = msg.x !== undefined ? msg.x : 10;
+                const spawnGridY = msg.y !== undefined ? msg.y : 10;
+                const isoPos = IsoMath.gridToIso(spawnGridX, spawnGridY, this.mapOriginX, this.mapOriginY);
                 this.objectManager.addRemotePlayer(msg.id, isoPos.x, isoPos.y);
 
                 this.showFloatingText(isoPos.x, isoPos.y - 120, "Un joueur arrive !", "#ffffff");
@@ -258,11 +257,14 @@ export class MainScene extends Scene {
             }
             else if (msg.type === 'CURRENT_PLAYERS') {
                 if (msg.players && Array.isArray(msg.players)) {
-                    msg.players.forEach((pid: string) => {
-                        // Similar spawn logic
-                        const spawnGrid = { x: 10, y: 10 };
-                        const isoPos = IsoMath.gridToIso(spawnGrid.x, spawnGrid.y, this.mapOriginX, this.mapOriginY);
-                        this.objectManager.addRemotePlayer(pid, isoPos.x, isoPos.y);
+                    msg.players.forEach((playerObj: any) => {
+                        // Le backend envoie maintenant des objets avec {id, x, y}
+                        const pId = typeof playerObj === 'string' ? playerObj : playerObj.id;
+                        const pX = typeof playerObj === 'string' ? 10 : (playerObj.x !== undefined ? playerObj.x : 10);
+                        const pY = typeof playerObj === 'string' ? 10 : (playerObj.y !== undefined ? playerObj.y : 10);
+
+                        const isoPos = IsoMath.gridToIso(pX, pY, this.mapOriginX, this.mapOriginY);
+                        this.objectManager.addRemotePlayer(pId, isoPos.x, isoPos.y);
                     });
                 }
             }
@@ -577,51 +579,12 @@ export class MainScene extends Scene {
      * Gère le placement effectif de l'objet
      */
     private handlePlacement(x: number, y: number): void {
-        // Création de l'objet
-        if (this.playerStore.placingItemName === 'Kit de Feu de Camp') {
-            // On utilise 'rock' teinté pour l'instant
-            const campfire = this.objectManager.placeObject(x, y, 'rock', this.mapOriginX, this.mapOriginY);
-            campfire.setTint(0xffaa00);
-            campfire.setName('Feu de Camp');
-            campfire.setData('type', 'campfire');
-
-            // Animation continue
-            this.tweens.add({
-                targets: campfire,
-                scale: { from: 1, to: 1.05 },
-                alpha: { from: 1, to: 0.9 },
-                yoyo: true,
-                repeat: -1,
-                duration: 1000
-            });
-
-            // Consommation de l'item
-            this.playerStore.removeItem(this.playerStore.placingItemName, 1);
-
-            // Feedback
-            this.playerStore.lastActionFeedback = "Feu de Camp placé !#" + Date.now();
-        } else if (this.playerStore.placingItemName === 'furnace') {
-            const furnace = this.objectManager.placeObject(x, y, 'furnace', this.mapOriginX, this.mapOriginY, true);
-            furnace.setName('Four en pierre');
-            furnace.setData('type', 'furnace'); // Ensure type is set for Station detection
-
-            // Le four est un obstacle
-            this.mapManager.updateCell(x, y, 1);
-
-            // Consommation de l'item
-            this.playerStore.removeItem(this.playerStore.placingItemName, 1);
-            this.playerStore.lastActionFeedback = "Four placé !#" + Date.now();
-        } else if (this.playerStore.placingItemName === 'clay_pot') {
-            const pot = this.objectManager.placeObject(x, y, 'clay_pot', this.mapOriginX, this.mapOriginY, true);
-            pot.setName('Pot en argile');
-            pot.setData('type', 'clay_pot');
-
-            // Consommation de l'item
-            this.playerStore.removeItem(this.playerStore.placingItemName, 1);
-            this.playerStore.lastActionFeedback = "Pot placé !#" + Date.now();
+        const networkStore = useNetworkStore();
+        if (this.playerStore.placingItemName) {
+            networkStore.sendPlace(x, y, this.playerStore.placingItemName);
         }
 
-        // Désactivation du mode placement (ou on le laisse pour en placer plusieurs ?) - Désactivation pour l'instant
+        // Désactivation du mode placement
         this.playerStore.setPlacementMode(false);
     }
 

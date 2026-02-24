@@ -194,3 +194,7 @@
 | 9.6 | 22/02/2026 | Alignement des IDs d'outils (Front/Back) pour la récolte et ajout de feedbacks visuels en cas de rejet d'action par le serveur |
 | 9.7 | 23/02/2026 | Fix du pathfinding de récolte : gestion des cibles solides et déclenchement immédiat (sans mouvement) si le joueur est adjacent, plus feedback local si la distance est trop grande |
 | 9.8 | 23/02/2026 | Audit Fullstack : Fix de la race condition double-fire (gameobjectup/pointerup), restauration du pathfinding adjacent pour les cibles solides, typage strict des payloads réseau et ajout de logs de debug sur toute la chaîne |
+| 10.0 | 23/02/2026 | **Bloc 10 : Multijoueur Visuel** — Transmission des coordonnées lors de la connexion, interpolation fluide des mouvements (Tweens) des joueurs distants, et mise à jour dynamique du Z-Sorting. |
+| 11.0 | 23/02/2026 | **Bloc 11 : Transformation (Crafting Autoritaire)** — Validation backend des composants, déduction transactionnelle `wallet` et propagation des objets craftés via `CRAFT_SUCCESS`. Remplacement des clés génériques Fronend par celles du Backend (`wood`, `stone`). |
+| 12.0 | 23/02/2026 | **Bloc 12 : L'Empreinte (Housing & Persistance)** — Implémentation de `ACTION_PLACE` centralisé côté serveur avec vérification d'inventaire (`UserManager`), diffusion globale via `RESOURCE_PLACED`, et sauvegarde/restauration persistante de l'état du monde (`world.json`) par le `GameState`. |
+| 10.2 | 24/02/2026 | Fix du Multijoueur : Handshake de présence (Join/Leave), génération d'UUID strict et rendu des sprites distants |

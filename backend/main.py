@@ -43,21 +43,28 @@ class ConnectionManager:
     async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
 
-        # Envoyer la liste des joueurs déjà connectés
-        current_players = list(self.active_connections.keys())
-        await websocket.send_text(json.dumps({
-            "type": "CURRENT_PLAYERS",
-            "players": current_players
-        }))
-
-        # Stocker la connexion
         self.active_connections[client_id] = websocket
         print(f"[WS] Client {client_id} connected ({len(self.active_connections)} total)")
 
+        # Envoyer la liste des joueurs déjà connectés avec leurs positions
+        current_players_data = []
+        for cid in self.active_connections.keys():
+            if cid != client_id:
+                user = userManager.get_or_create_user(cid)
+                current_players_data.append({"id": cid, "x": user.get("x", 10), "y": user.get("y", 10)})
+        
+        await websocket.send_text(json.dumps({
+            "type": "CURRENT_PLAYERS",
+            "players": current_players_data
+        }))
+
         # Notifier les autres
+        joined_user = userManager.get_or_create_user(client_id)
         await self.broadcast(json.dumps({
             "type": "PLAYER_JOINED",
-            "id": client_id
+            "id": client_id,
+            "x": joined_user.get("x", 10),
+            "y": joined_user.get("y", 10)
         }), exclude_id=client_id)
 
     def disconnect(self, client_id: str):
@@ -233,6 +240,82 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         y=y
                     ))
                 # else: Rien à récolter, on ignore silencieusement
+
+            # ──────────── ACTION_CRAFT (Artisanat Autoritaire) ────────────
+            elif msg_type == "ACTION_CRAFT":
+                recipe_id = payload.get("recipeId")
+                if not recipe_id:
+                    continue
+                
+                recipe = recipes.get_craft_recipe(recipe_id)
+                if not recipe:
+                    await websocket.send_text(make_msg("ERROR", message=f"Recette inconnue : {recipe_id}"))
+                    continue
+                
+                cost_dict = recipe["cost"]
+                
+                new_wallet = userManager.consume_resources(client_id, cost_dict)
+                if not new_wallet:
+                    await websocket.send_text(make_msg("ERROR", message="Ressources insuffisantes"))
+                    continue
+                
+                output_name = recipe["output"]
+                output_count = recipe.get("yield", 1)
+                
+                userManager.add_item(client_id, output_name, output_count)
+                
+                # Informe le client que le craft a réussi pour qu'il s'ajoute le produit
+                await websocket.send_text(make_msg("CRAFT_SUCCESS", payload={"item": output_name, "count": output_count}))
+                # Actualise le portefeuille du joueur (les minerais/bois consommés)
+                await websocket.send_text(make_msg("WALLET_UPDATE", payload=new_wallet))
+
+            # ──────────── ACTION_PLACE (Placement de l'inventaire) ────────────
+            elif msg_type == "ACTION_PLACE":
+                x = payload.get("x")
+                y = payload.get("y")
+                item_id = payload.get("itemId")
+                
+                if x is None or y is None or not item_id:
+                    continue
+
+                if not userManager.consume_item(client_id, item_id, 1):
+                    await websocket.send_text(make_msg("ERROR", message=f"Vous ne possédez pas : {item_id}"))
+                    continue
+
+                # Mapping "inventory item name" -> "GameState (asset, type)"
+                place_rules = {
+                    "Kit de Feu de Camp": {"asset": "rock", "type": "campfire"},
+                    "furnace": {"asset": "furnace", "type": "furnace"},
+                    "clay_pot": {"asset": "clay_pot", "type": "clay_pot"}
+                }
+                
+                rule = place_rules.get(item_id)
+                if not rule:
+                    userManager.add_item(client_id, item_id, 1)
+                    await websocket.send_text(make_msg("ERROR", message=f"Objet non plaçable : {item_id}"))
+                    continue
+                    
+                target_asset = rule["asset"]
+                target_type = rule["type"]
+
+                new_res = gameState.add_resource(
+                    asset=target_asset,
+                    obj_type=target_type,
+                    x=x,
+                    y=y
+                )
+                
+                if not new_res:
+                    userManager.add_item(client_id, item_id, 1)
+                    await websocket.send_text(make_msg("ERROR", message="Case occupée"))
+                    continue
+
+                # Broadcast placement
+                await manager.broadcast(make_msg(
+                    "RESOURCE_PLACED",
+                    resource=new_res
+                ))
+                await websocket.send_text(make_msg("PLACE_SUCCESS", payload={"itemId": item_id}))
 
             # ──────────── PLAYER_BUILD (Construction) ────────────
             elif msg_type == "PLAYER_BUILD":

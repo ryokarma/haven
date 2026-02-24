@@ -53,11 +53,39 @@
     },
     "f9cc0c9f-2cde-4d09-b94c-73bdedef8475": {
         "id": "f9cc0c9f-2cde-4d09-b94c-73bdedef8475",
-        "x": 23,
-        "y": 1,
+        "x": 9,
+        "y": 3,
         "wallet": {
-            "wood": 6,
-            "stone": 1
+            "wood": 14,
+            "stone": 0,
+            "apple": 6
+        }
+    },
+    "6da5472b-d65a-4713-9931-aa460acfd0bd": {
+        "id": "6da5472b-d65a-4713-9931-aa460acfd0bd",
+        "x": 11,
+        "y": 2,
+        "wallet": {
+            "wood": 0,
+            "stone": 0
+        }
+    },
+    "47e4f37e-9237-4fc2-b4fd-ac61febd49de": {
+        "id": "47e4f37e-9237-4fc2-b4fd-ac61febd49de",
+        "x": 4,
+        "y": 4,
+        "wallet": {
+            "wood": 0,
+            "stone": 0
+        }
+    },
+    "e03bc92a-6607-4e63-bcd1-300173b67fdf": {
+        "id": "e03bc92a-6607-4e63-bcd1-300173b67fdf",
+        "x": 13,
+        "y": 0,
+        "wallet": {
+            "wood": 1,
+            "stone": 0
         }
     }
 }

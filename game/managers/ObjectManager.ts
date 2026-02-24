@@ -130,6 +130,14 @@ export class ObjectManager {
 
         // LOGIC LUMIÈRE (Campfire)
         if (type === 'camp' || type === 'campfire' || assetKey === 'campfire') { // Adapt key check
+            // Teinte orangée du feu de camp si l'asset est "rock"
+            if (assetKey === 'rock') {
+                customTint = 0xffaa00;
+                obj.setData('originalTint', customTint);
+                obj.setTint(customTint);
+                obj.setName('Feu de Camp');
+            }
+
             const glow = this.scene.add.image(pos.x, pos.y, 'light_glow');
             glow.setOrigin(0.5, 0.5);
             glow.setBlendMode(Phaser.BlendModes.ADD);
@@ -358,14 +366,27 @@ export class ObjectManager {
     addRemotePlayer(id: string, x: number, y: number): void {
         if (this.remotePlayers.has(id)) return;
 
-        // Use 'hero' texture or similar fallback
-        const playerSprite = this.scene.add.sprite(x, y, 'hero_idle_down'); // Fallback to hero texture
+        // Use 'hero' texture which we know exists
+        const playerSprite = this.scene.add.sprite(x, y, 'hero');
         playerSprite.setTint(0xcccccc); // Greyish tint to distinguish
-        playerSprite.setOrigin(0.5, 1);
+        playerSprite.setOrigin(RENDER_OFFSETS['player']!.originX, RENDER_OFFSETS['player']!.originY);
         playerSprite.setScale(1);
 
-        // Basic depth
-        playerSprite.setDepth(y + 100);
+        // Z-Sorting dynamique respectant les assets du monde
+        playerSprite.setDepth(y + (x * 0.001));
+
+        // Ajout d'un texte flottant avec l'ID du joueur, pour le différencier
+        const shortId = id.substring(0, 8); // On raccourcit un peu si c'est un UUID long
+        const nameText = this.scene.add.text(x, y - 60, `Joueur ${shortId}`, {
+            fontFamily: 'Arial',
+            fontSize: '12px',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3
+        });
+        nameText.setOrigin(0.5, 0.5);
+        nameText.setDepth(999999);
+        playerSprite.setData('nameText', nameText);
 
         this.remotePlayers.set(id, playerSprite);
         console.log(`[ObjectManager] Added remote player ${id}`);
@@ -377,6 +398,8 @@ export class ObjectManager {
     removeRemotePlayer(id: string): void {
         const sprite = this.remotePlayers.get(id);
         if (sprite) {
+            const nameText = sprite.getData('nameText') as Phaser.GameObjects.Text | undefined;
+            if (nameText) nameText.destroy();
             sprite.destroy();
             this.remotePlayers.delete(id);
             console.log(`[ObjectManager] Removed remote player ${id}`);
@@ -394,13 +417,29 @@ export class ObjectManager {
             // On s'assure que duration n'est pas 0 ou négatif
             const duration = Math.max(50, (dist / 32) * 250); // Basé sur ~250ms par tuile (32px approx)
 
+            // Flip selon la direction X isométrique
+            if (targetX < sprite.x) {
+                sprite.setFlipX(true);
+            } else if (targetX > sprite.x) {
+                sprite.setFlipX(false);
+            }
+
+            const nameText = sprite.getData('nameText') as Phaser.GameObjects.Text | undefined;
+
             // Tween vers la nouvelle position
             this.scene.tweens.add({
                 targets: sprite,
                 x: targetX,
                 y: targetY,
                 duration: duration,
-                ease: 'Linear'
+                ease: 'Linear',
+                onUpdate: () => {
+                    // Update Z-Sorting dynamically while moving
+                    sprite.setDepth(sprite.y + (sprite.x * 0.001));
+                    if (nameText) {
+                        nameText.setPosition(sprite.x, sprite.y - 60);
+                    }
+                }
             });
 
             // TODO: Jouer animation de marche si disponible

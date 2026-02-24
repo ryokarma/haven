@@ -152,9 +152,19 @@ export const useNetworkStore = defineStore('network', () => {
         send('ACTION_HARVEST', { resource_id, tool: equipped_tool });
     }
 
+    function sendCraft(recipeId: string) {
+        console.log(`[Network] → ACTION_CRAFT: recipeId=${recipeId}`);
+        send('ACTION_CRAFT', { recipeId });
+    }
+
+    function sendPlace(x: number, y: number, item_id: string) {
+        console.log(`[Network] → ACTION_PLACE: itemId=${item_id} at (${x},${y})`);
+        send('ACTION_PLACE', { x, y, itemId: item_id });
+    }
+
     // --- Listeners Auto ---
 
-    function listenForWalletUpdates() {
+    function listenForEconomy() {
         const playerStore = usePlayerStore();
         onMessage((msg: any) => {
             if (msg.type === 'WALLET_UPDATE') {
@@ -162,6 +172,14 @@ export const useNetworkStore = defineStore('network', () => {
             } else if (msg.type === 'PLAYER_SYNC') {
                 if (msg.payload?.wallet) {
                     playerStore.updateEconomyInventory(msg.payload.wallet);
+                }
+            } else if (msg.type === 'CRAFT_SUCCESS') {
+                playerStore.addItem(msg.payload.item, msg.payload.count);
+                playerStore.lastActionFeedback = `Fabriqué : ${msg.payload.item} !#${Date.now()}`;
+            } else if (msg.type === 'PLACE_SUCCESS') {
+                if (msg.payload && msg.payload.itemId) {
+                    playerStore.removeItem(msg.payload.itemId, 1);
+                    playerStore.lastActionFeedback = "Objet placé !#" + Date.now();
                 }
             }
         });
@@ -205,7 +223,9 @@ export const useNetworkStore = defineStore('network', () => {
         sendInteract,
         sendBuild,
         sendHarvest,
-        listenForWalletUpdates,
+        sendCraft,
+        sendPlace,
+        listenForEconomy,
         listenForChatMessages,
         listenForErrors,
         onMessage

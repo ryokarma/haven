@@ -9,6 +9,7 @@ La carte 100x100 est peuplée aléatoirement avec une seed fixe pour la reproduc
 import time
 import random
 import math
+import os
 from typing import List, Dict, Any, Optional, Set, Union
 
 from backend.perlin import Perlin
@@ -149,16 +150,40 @@ def _generate_world(seed: int) -> List[Dict[str, Any]]:
     return resources
 
 
+WORLD_FILE = os.path.join("backend", "data", "world.json")
+
 class GameState:
     def __init__(self):
-        """Initialise l'état du monde avec génération procédurale."""
-        # Génération initiale (reproductible via la seed)
-        self.resources: List[Dict[str, Any]] = _generate_world(WORLD_SEED)
+        """Initialise l'état du monde avec génération procédurale ou depuis une sauvegarde."""
+        self.resources = []
+        
+        if os.path.exists(WORLD_FILE):
+            try:
+                import json
+                with open(WORLD_FILE, "r") as f:
+                    self.resources = json.load(f)
+                print(f"[GameState] Monde chargé depuis {WORLD_FILE} ({len(self.resources)} objets).")
+            except Exception as e:
+                print(f"[GameState] Erreur de lecture de {WORLD_FILE}: {e}")
+                
+        if not self.resources:
+            self.resources: List[Dict[str, Any]] = _generate_world(WORLD_SEED)
+            self.save_world()
 
         # Index spatial pour les lookups O(1) : (x, y) → ressource
         self._spatial_index: Dict[tuple, Dict[str, Any]] = {
             (r["x"], r["y"]): r for r in self.resources
         }
+        
+    def save_world(self):
+        """Sauvegarde l'état du monde de manière persistante."""
+        import json
+        os.makedirs(os.path.dirname(WORLD_FILE), exist_ok=True)
+        try:
+            with open(WORLD_FILE, "w") as f:
+                json.dump(self.resources, f, indent=4)
+        except Exception as e:
+            print(f"[GameState] Erreur lors de la sauvegarde: {e}")
 
     # ─────────────────── Lecture ───────────────────
 
@@ -182,6 +207,7 @@ class GameState:
         if res is not None:
             try:
                 self.resources.remove(res)
+                self.save_world()
             except ValueError:
                 pass  # Déjà absent — incohérence ignorée silencieusement
         return res
@@ -297,4 +323,5 @@ class GameState:
 
         self.resources.append(new_resource)
         self._spatial_index[(x, y)] = new_resource
+        self.save_world()
         return new_resource

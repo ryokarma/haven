@@ -30,3 +30,17 @@ BUILD_RECIPES: Dict[str, Dict[str, Any]] = {
 def get_recipe(item_id: str) -> Optional[Dict[str, Any]]:
     """Récupère la recette pour un item donné. Retourne None si inconnu."""
     return BUILD_RECIPES.get(item_id)
+
+CRAFT_RECIPES: Dict[str, Dict[str, Any]] = {
+    "campfire": {"cost": {"wood": 5, "stone": 5}, "output": "Kit de Feu de Camp", "yield": 1},
+    "stone_axe": {"cost": {"wood": 10, "stone": 5}, "output": "Hache en pierre", "yield": 1},
+    "craft_knife": {"cost": {"wood": 1, "stone": 1}, "output": "tool_knife", "yield": 1},
+    "craft_pickaxe": {"cost": {"wood": 2, "stone": 2}, "output": "tool_pickaxe", "yield": 1},
+    "craft_shovel": {"cost": {"wood": 2, "stone": 1}, "output": "tool_shovel", "yield": 1},
+    "craft_furnace": {"cost": {"stone": 10}, "output": "furnace", "yield": 1},
+    "craft_clay_pot": {"cost": {"raw_clay": 2, "wood": 1}, "output": "clay_pot", "yield": 1},
+    "craft_watering_can": {"cost": {"raw_clay": 2, "wood": 2}, "output": "watering_can", "yield": 1}
+}
+
+def get_craft_recipe(recipe_id: str) -> Optional[Dict[str, Any]]:
+    return CRAFT_RECIPES.get(recipe_id)
