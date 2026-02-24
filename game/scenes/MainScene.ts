@@ -244,19 +244,27 @@ export class MainScene extends Scene {
         // Abonnement aux messages
         networkStore.onMessage((msg: any) => {
             if (msg.type === 'PLAYER_JOINED') {
+                console.log('[Network] Autre joueur rejoint:', msg);
                 // Le serveur envoie maintenant msg.x et msg.y en coordonnées GRILLE.
                 const spawnGridX = msg.x !== undefined ? msg.x : 10;
                 const spawnGridY = msg.y !== undefined ? msg.y : 10;
+
+                this.worldStore.addOtherPlayer(msg.id, spawnGridX, spawnGridY);
+
                 const isoPos = IsoMath.gridToIso(spawnGridX, spawnGridY, this.mapOriginX, this.mapOriginY);
                 this.objectManager.addRemotePlayer(msg.id, isoPos.x, isoPos.y);
 
                 this.showFloatingText(isoPos.x, isoPos.y - 120, "Un joueur arrive !", "#ffffff");
             }
             else if (msg.type === 'PLAYER_LEFT') {
+                console.log('[Network] Autre joueur a quitté:', msg);
+                this.worldStore.removeOtherPlayer(msg.id);
                 this.objectManager.removeRemotePlayer(msg.id);
             }
             else if (msg.type === 'CURRENT_PLAYERS') {
+                console.log('[Network] Liste des joueurs actuelle reçue:', msg.players);
                 if (msg.players && Array.isArray(msg.players)) {
+                    this.worldStore.setOtherPlayers(msg.players);
                     msg.players.forEach((playerObj: any) => {
                         // Le backend envoie maintenant des objets avec {id, x, y}
                         const pId = typeof playerObj === 'string' ? playerObj : playerObj.id;
@@ -269,6 +277,8 @@ export class MainScene extends Scene {
                 }
             }
             else if (msg.type === 'PLAYER_MOVED') {
+                console.log('[Network] Mouvement d\'un autre joueur reçu:', msg);
+                this.worldStore.moveOtherPlayer(msg.id, msg.x, msg.y);
                 // Session 9.4 : Le serveur envoie désormais des coords GRILLE.
                 // On convertit en ISO pour positionner le sprite distant.
                 const remoteIso = IsoMath.gridToIso(msg.x, msg.y, this.mapOriginX, this.mapOriginY);

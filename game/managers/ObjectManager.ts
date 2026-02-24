@@ -368,7 +368,7 @@ export class ObjectManager {
 
         // Use 'hero' texture which we know exists
         const playerSprite = this.scene.add.sprite(x, y, 'hero');
-        playerSprite.setTint(0xcccccc); // Greyish tint to distinguish
+        playerSprite.setTint(0xffa500); // Orange tint to distinguish clearly
         playerSprite.setOrigin(RENDER_OFFSETS['player']!.originX, RENDER_OFFSETS['player']!.originY);
         playerSprite.setScale(1);
 

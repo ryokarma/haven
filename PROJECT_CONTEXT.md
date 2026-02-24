@@ -198,3 +198,4 @@
 | 11.0 | 23/02/2026 | **Bloc 11 : Transformation (Crafting Autoritaire)** — Validation backend des composants, déduction transactionnelle `wallet` et propagation des objets craftés via `CRAFT_SUCCESS`. Remplacement des clés génériques Fronend par celles du Backend (`wood`, `stone`). |
 | 12.0 | 23/02/2026 | **Bloc 12 : L'Empreinte (Housing & Persistance)** — Implémentation de `ACTION_PLACE` centralisé côté serveur avec vérification d'inventaire (`UserManager`), diffusion globale via `RESOURCE_PLACED`, et sauvegarde/restauration persistante de l'état du monde (`world.json`) par le `GameState`. |
 | 10.2 | 24/02/2026 | Fix du Multijoueur : Handshake de présence (Join/Leave), génération d'UUID strict et rendu des sprites distants |
+| 10.3 | 24/02/2026 | Fix du Rendu Multijoueur : Conversion isométrique des coordonnées des autres joueurs, Z-Sorting et instanciation des sprites distants |

@@ -12,6 +12,12 @@ export interface ServerWorldObject {
     y: number;
 }
 
+export interface RemotePlayer {
+    id: string;
+    x: number;
+    y: number;
+}
+
 export interface WorldState {
     worldSeed: string;
     time: number;
@@ -21,6 +27,10 @@ export interface WorldState {
      * Utilisée par l'ObjectManager pour le rendu visuel initial.
      */
     serverObjects: ServerWorldObject[];
+    /**
+     * Dictionnaire réactif des autres joueurs connectés
+     */
+    otherPlayers: Record<string, RemotePlayer>;
 }
 
 
@@ -30,6 +40,7 @@ export const useWorldStore = defineStore('world', {
         time: 480, // Commence à 08:00
         isMapLoaded: false,
         serverObjects: [],
+        otherPlayers: {},
     }),
     getters: {
         hours: (state) => Math.floor(state.time / 60),
@@ -114,5 +125,34 @@ export const useWorldStore = defineStore('world', {
         removeServerObject(id: string) {
             this.serverObjects = this.serverObjects.filter(o => o.id !== id);
         },
+
+        // --- MULTIJOUEUR ---
+
+        setOtherPlayers(players: any[]) {
+            this.otherPlayers = {};
+            players.forEach(p => {
+                const pId = typeof p === 'string' ? p : p.id;
+                const pX = typeof p === 'string' ? 10 : (p.x !== undefined ? p.x : 10);
+                const pY = typeof p === 'string' ? 10 : (p.y !== undefined ? p.y : 10);
+                this.otherPlayers[pId] = { id: pId, x: pX, y: pY };
+            });
+        },
+
+        addOtherPlayer(id: string, x: number, y: number) {
+            this.otherPlayers[id] = { id, x, y };
+        },
+
+        removeOtherPlayer(id: string) {
+            delete this.otherPlayers[id];
+        },
+
+        moveOtherPlayer(id: string, x: number, y: number) {
+            if (this.otherPlayers[id]) {
+                this.otherPlayers[id].x = x;
+                this.otherPlayers[id].y = y;
+            } else {
+                this.addOtherPlayer(id, x, y);
+            }
+        }
     }
 });
