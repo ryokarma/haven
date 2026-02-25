@@ -268,6 +268,11 @@ export class MainScene extends Scene {
                     msg.players.forEach((playerObj: any) => {
                         // Le backend envoie maintenant des objets avec {id, x, y}
                         const pId = typeof playerObj === 'string' ? playerObj : playerObj.id;
+
+                        // Sécurité : Ne pas instancier le sprite du joueur local
+                        const myId = localStorage.getItem('haven_player_id');
+                        if (pId === myId) return;
+
                         const pX = typeof playerObj === 'string' ? 10 : (playerObj.x !== undefined ? playerObj.x : 10);
                         const pY = typeof playerObj === 'string' ? 10 : (playerObj.y !== undefined ? playerObj.y : 10);
 

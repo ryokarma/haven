@@ -46,7 +46,8 @@ class ConnectionManager:
         self.active_connections[client_id] = websocket
         print(f"[WS] Client {client_id} connected ({len(self.active_connections)} total)")
 
-        # Envoyer la liste des joueurs déjà connectés avec leurs positions
+        # Note (Session 10.4): Cette liste est maintenant envoyée aussi lors de REQUEST_WORLD_STATE
+        # pour éviter la race condition où ce message arrive avant que la scène Phaser ne soit prête.
         current_players_data = []
         for cid in self.active_connections.keys():
             if cid != client_id:
@@ -387,6 +388,19 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 await manager.send_to(client_id, make_msg(
                     "WORLD_STATE",
                     payload=world_state
+                ))
+
+                # Session 10.4 : On renvoie les joueurs déjà connectés ici
+                # car le client est enfin prêt à les afficher (sa scène Phaser écoute)
+                current_players_data = []
+                for cid in manager.active_connections.keys():
+                    if cid != client_id:
+                        user = userManager.get_or_create_user(cid)
+                        current_players_data.append({"id": cid, "x": user.get("x", 10), "y": user.get("y", 10)})
+                
+                await manager.send_to(client_id, make_msg(
+                    "CURRENT_PLAYERS",
+                    players=current_players_data
                 ))
 
             # ──────────── PLAYER_CHAT ────────────

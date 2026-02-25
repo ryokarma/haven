@@ -53,8 +53,8 @@
     },
     "f9cc0c9f-2cde-4d09-b94c-73bdedef8475": {
         "id": "f9cc0c9f-2cde-4d09-b94c-73bdedef8475",
-        "x": 7,
-        "y": 4,
+        "x": 6,
+        "y": 3,
         "wallet": {
             "wood": 14,
             "stone": 0,
@@ -85,6 +85,15 @@
         "y": 7,
         "wallet": {
             "wood": 1,
+            "stone": 0
+        }
+    },
+    "8a2fe864-fac8-40b4-b20c-08a025195107": {
+        "id": "8a2fe864-fac8-40b4-b20c-08a025195107",
+        "x": 0,
+        "y": 5,
+        "wallet": {
+            "wood": 0,
             "stone": 0
         }
     }
