@@ -2,11 +2,13 @@
 import { ref, computed, watch } from 'vue';
 import { usePlayerStore } from '@/stores/player';
 import { useWorldStore } from '@/stores/world';
+import { useNetworkStore } from '@/stores/network';
 import CraftingWindow from './CraftingWindow.vue';
 import CharacterWindow from './CharacterWindow.vue';
 
 const player = usePlayerStore();
 const world = useWorldStore();
+const networkStore = useNetworkStore();
 const isInventoryOpen = ref(false);
 const isCraftingOpen = ref(false);
 const isCharacterOpen = ref(false);
@@ -36,6 +38,7 @@ const resetSave = () => {
     }
 };
 
+
 // Fonction pour consommer un item
 const handleItemClick = (itemName: string) => {
   player.consumeItem(itemName);
@@ -63,7 +66,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
   <div class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6 z-50">
     
     <!-- BOUTON RESET (Debug) -->
-    <div class="pointer-events-auto absolute top-4 right-4 z-[100]">
+    <div class="pointer-events-auto absolute top-4 right-4 z-[100] flex flex-col gap-2">
         <button 
             @click="resetSave"
             class="flex items-center gap-2 bg-red-600/20 hover:bg-red-600/80 border border-red-500/50 text-red-200 hover:text-white text-[10px] font-bold px-3 py-1.5 rounded uppercase tracking-wider backdrop-blur-sm shadow-lg transition-all active:scale-95"

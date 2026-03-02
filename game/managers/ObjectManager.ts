@@ -8,23 +8,23 @@ import type { ServerWorldObject } from '../../stores/world';
  * Centralise les Magic Numbers pour les positions
  */
 export const RENDER_OFFSETS: Record<string, { originX: number; originY: number; offsetY: number }> = {
-    'default': { originX: 0.5, originY: 1.0, offsetY: 0 },
-    'tree': { originX: 0.5, originY: 0.82, offsetY: 0 },
-    'rock': { originX: 0.5, originY: 0.72, offsetY: 0 },
-    'cotton_bush': { originX: 0.5, originY: 1.0, offsetY: 0 },
-    'clay_mound': { originX: 0.5, originY: 0.5, offsetY: 0 },
+    'default': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'tree': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'rock': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'cotton_bush': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'clay_mound': { originX: 0.5, originY: 1.0, offsetY: 16 },
     // Alias serveur → même ancrage que clay_mound
-    'clay_node': { originX: 0.5, originY: 0.6, offsetY: 0 },
+    'clay_node': { originX: 0.5, originY: 1.0, offsetY: 16 },
     // Pommier → même ancrage que tree (même silhouette haute)
-    'apple_tree': { originX: 0.5, originY: 0.95, offsetY: 0 },
-    'player': { originX: 0.5, originY: 1.0, offsetY: 0 },
-    'clay_pot': { originX: 0.5, originY: 0.8, offsetY: 0 },
-    'clay_pot_seeded': { originX: 0.5, originY: 0.8, offsetY: 0 },
-    'clay_pot_watered': { originX: 0.5, originY: 0.8, offsetY: 0 },
-    'clay_pot_ready': { originX: 0.5, originY: 0.9, offsetY: 0 },
-    'furnace': { originX: 0.5, originY: 0.8, offsetY: 0 },
-    'watering_can': { originX: 0.5, originY: 0.8, offsetY: 0 },
-    'path_stone': { originX: 0.5, originY: 0.5, offsetY: 0 },
+    'apple_tree': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'player': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'clay_pot': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'clay_pot_seeded': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'clay_pot_watered': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'clay_pot_ready': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'furnace': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'watering_can': { originX: 0.5, originY: 1.0, offsetY: 16 },
+    'path_stone': { originX: 0.5, originY: 1.0, offsetY: 16 },
 };
 
 /**
@@ -102,10 +102,9 @@ export class ObjectManager {
             // On va dire Depth 10. Les obstacles seront > y (qui est souvent > 0).
             obj.setDepth(1);
         } else {
-            // Obstacle / Objet Vertical — Profondeur basée sur la position au SOL (pos.y).
-            // Session 9.4 : Suppression du `height * 0.5` qui brisait le tri avec le joueur.
-            // Le tri isométrique repose uniquement sur y + x*epsilon, cohérent avec Player.
-            obj.setDepth(pos.y + (pos.x * 0.001));
+            // Obstacle / Objet Vertical — Profondeur basée sur la position au SOL visuelle (obj.y).
+            // Le tri isométrique repose uniquement sur obj.y + obj.x*epsilon, cohérent avec Player.
+            obj.setDepth(obj.y + (obj.x * 0.001));
         }
 
         obj.setInteractive({ cursor: 'pointer' });
@@ -130,8 +129,8 @@ export class ObjectManager {
 
         // LOGIC LUMIÈRE (Campfire)
         if (type === 'camp' || type === 'campfire' || assetKey === 'campfire') { // Adapt key check
-            // Teinte orangée du feu de camp si l'asset est "rock"
-            if (assetKey === 'rock') {
+            // Teinte orangée du feu de camp si l'asset est "rock-1"
+            if (assetKey === 'rock-1') {
                 customTint = 0xffaa00;
                 obj.setData('originalTint', customTint);
                 obj.setTint(customTint);
@@ -244,17 +243,31 @@ export class ObjectManager {
         return this.objectMap.has(`${x},${y}`);
     }
 
-    /**
-     * Nettoie tous les objets
-     */
-    clear(): void {
-        this.objectMap.forEach(obj => {
-            // Détruire la lumière attachée si présente avant de détruire l'objet
-            const light = obj.getData('light') as Phaser.GameObjects.Image | undefined;
-            if (light) light.destroy();
-            obj.destroy();
-        });
-        this.objectMap.clear();
+    clearObjects(): void {
+        if (this.objectMap) {
+            this.objectMap.forEach(obj => {
+                const light = obj?.getData('light') as Phaser.GameObjects.Image | undefined;
+                if (light) light.destroy(true);
+                if (obj) obj.destroy(true);
+            });
+            this.objectMap.clear();
+        }
+
+        if (this.serverObjectMap) {
+            this.serverObjectMap.clear();
+        }
+
+        if (this.remotePlayers) {
+            this.remotePlayers.forEach(p => {
+                const nameText = p?.getData('nameText') as Phaser.GameObjects.Text | undefined;
+                if (nameText) nameText.destroy(true);
+                if (p) p.destroy(true);
+            });
+            this.remotePlayers.clear();
+        }
+
+        this.removedObjectIds = [];
+        this.placedObjects = [];
     }
 
     /**
@@ -367,17 +380,18 @@ export class ObjectManager {
         if (this.remotePlayers.has(id)) return;
 
         // Use 'hero' texture which we know exists
-        const playerSprite = this.scene.add.sprite(x, y, 'hero');
+        const actualY = y + RENDER_OFFSETS['player']!.offsetY;
+        const playerSprite = this.scene.add.sprite(x, actualY, 'hero');
         playerSprite.setTint(0xffa500); // Orange tint to distinguish clearly
         playerSprite.setOrigin(RENDER_OFFSETS['player']!.originX, RENDER_OFFSETS['player']!.originY);
         playerSprite.setScale(1);
 
         // Z-Sorting dynamique respectant les assets du monde
-        playerSprite.setDepth(y + (x * 0.001));
+        playerSprite.setDepth(actualY + (x * 0.001));
 
         // Ajout d'un texte flottant avec l'ID du joueur, pour le différencier
         const shortId = id.substring(0, 8); // On raccourcit un peu si c'est un UUID long
-        const nameText = this.scene.add.text(x, y - 60, `Joueur ${shortId}`, {
+        const nameText = this.scene.add.text(x, actualY - 60, `Joueur ${shortId}`, {
             fontFamily: 'Arial',
             fontSize: '12px',
             color: '#ffffff',
@@ -412,8 +426,9 @@ export class ObjectManager {
     moveRemotePlayer(id: string, targetX: number, targetY: number): void {
         const sprite = this.remotePlayers.get(id);
         if (sprite) {
+            const actualY = targetY + RENDER_OFFSETS['player']!.offsetY;
             // Distance pour calculer la durée (vitesse constante)
-            const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, targetX, targetY);
+            const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, targetX, actualY);
             // On s'assure que duration n'est pas 0 ou négatif
             const duration = Math.max(50, (dist / 32) * 250); // Basé sur ~250ms par tuile (32px approx)
 
@@ -430,7 +445,7 @@ export class ObjectManager {
             this.scene.tweens.add({
                 targets: sprite,
                 x: targetX,
-                y: targetY,
+                y: actualY,
                 duration: duration,
                 ease: 'Linear',
                 onUpdate: () => {

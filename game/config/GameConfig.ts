@@ -3,8 +3,8 @@
  * Contient toutes les constantes et paramètres du jeu
  */
 export class GameConfig {
-    // Taille de la carte
-    static readonly MAP_SIZE = 100;
+    // Taille de la carte (mutable pour Multi-Maps)
+    static MAP_SIZE = 100;
 
     // Dimensions de la maison
     static readonly HOUSE = {
@@ -112,16 +112,16 @@ export interface AssetDefinition {
  */
 export const ASSET_MANIFEST: Record<string, AssetDefinition> = {
     'tree': {
-        assetKey: 'tree',
-        pixelHeight: 128, // Hauteur hypothétique
+        assetKey: 'tree-1',
+        pixelHeight: 128,
         originX: 0.5,
-        originY: 0.82     // Ajustement final
+        originY: 1.0     // Ajustement final
     },
     'rock': {
-        assetKey: 'rock',
+        assetKey: 'rock-1',
         pixelHeight: 64,
         originX: 0.5,
-        originY: 0.72     // Ajustement final
+        originY: 1.0     // Ajustement final
     },
     'cotton_bush': {
         assetKey: 'tex_cotton_bush',
@@ -203,9 +203,9 @@ export const ASSET_MANIFEST: Record<string, AssetDefinition> = {
         originY: 0.9
     },
     'fountain_placeholder': {
-        assetKey: 'rock', // Utilise rock en attendant
+        assetKey: 'rock-1', // Utilise rock en attendant
         pixelHeight: 96,
         originX: 0.5,
-        originY: 0.78
+        originY: 1.0
     }
 };

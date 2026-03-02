@@ -34,6 +34,28 @@ export class MapManager {
     }
 
     /**
+     * Met à jour l'origine de la carte (pour le changement de map)
+     */
+    public setOrigin(originX: number, originY: number): void {
+        this.mapOriginX = originX;
+        this.mapOriginY = originY;
+    }
+
+    /**
+     * Nettoie toutes les tuiles isométriques du MapManager (Hotfix 16.2)
+     */
+    public clearMap(): void {
+        const tileGroup = this.tileManager.getTileGroup();
+        if (tileGroup) {
+            // Destruction explicite "Bulldozer" pour s'assurer que les GameObjects disparaissent du displayList
+            tileGroup.getChildren().forEach(child => {
+                if (child.destroy) child.destroy(true); // true = removeFromScene
+            });
+            tileGroup.clear(true, true);
+        }
+    }
+
+    /**
      * Récupère les données de la grille
      */
     get gridData(): number[][] {
@@ -59,12 +81,18 @@ export class MapManager {
 
         // TODO: Pour des tailles de carte > 100x100, envisager le Chunking ou WebWorker pour éviter de bloquer le thread principal.
         this.initGrid();
-        this.generateTerrain(perlin);
-        this.finalizeMap();
+
+        const isHousing = worldStore.mapId.startsWith('housing_');
+
+        if (!isHousing) {
+            this.generateTerrain(perlin);
+        }
+
+        this.finalizeMap(isHousing);
     }
 
     /**
-     * Initialise la grille vide
+     * Initialise la grille avec des tuiles d'herbe par défaut
      */
     private initGrid(): void {
         this._gridData = [];
@@ -115,16 +143,18 @@ export class MapManager {
     }
 
     /**
-     * Finalise la carte en plaçant tuiles et objets
+     * Finalise la génération en plaçant les tuiles et décors (Phase 2)
      */
-    private finalizeMap(): void {
+    private finalizeMap(isHousing: boolean = false): void {
         for (let y = 0; y < GameConfig.MAP_SIZE; y++) {
             const row = this._gridData[y];
             if (!row) continue;
 
             for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
                 let cellType = row[x];
-                const isInHouse = this.isInsideHouse(x, y);
+
+                // Gérer l'intérieur de la maison uniquement sur la map farm_main pour l'instant
+                const isInHouse = !isHousing && this.isInsideHouse(x, y);
 
                 // Chance d'obstacle (Désactivé pour la session 4.1 : Server Authority)
                 /* if (cellType === 0 && !isInHouse && (x > 5 || y > 5)) {

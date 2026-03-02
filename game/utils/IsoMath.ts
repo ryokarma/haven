@@ -1,11 +1,14 @@
 export class IsoMath {
     static readonly TILE_WIDTH = 64;
-    static readonly TILE_HEIGHT = 37; // Hauteur ajustée pour le "True Isometric" (30°)
+    static readonly TILE_HEIGHT = 32; // Valeur standard standsard 64x32
 
     static gridToIso(x: number, y: number, originX: number = 0, originY: number = 0): { x: number, y: number } {
         const isoX = (x - y) * (this.TILE_WIDTH / 2);
         const isoY = (x + y) * (this.TILE_HEIGHT / 2);
-        return { x: originX + isoX, y: originY + isoY };
+        return {
+            x: Math.round(originX + isoX),
+            y: Math.round(originY + isoY)
+        };
     }
 
     static isoToGrid(screenX: number, screenY: number, originX: number = 0, originY: number = 0): { x: number, y: number } {

@@ -31,6 +31,12 @@ export interface WorldState {
      * Dictionnaire réactif des autres joueurs connectés
      */
     otherPlayers: Record<string, RemotePlayer>;
+
+    // --- MULTI-MAP ---
+    mapId: string;
+    mapWidth: number;
+    mapHeight: number;
+    mapChangedSignal: number;
 }
 
 
@@ -41,6 +47,10 @@ export const useWorldStore = defineStore('world', {
         isMapLoaded: false,
         serverObjects: [],
         otherPlayers: {},
+        mapId: 'farm_main',
+        mapWidth: 100,
+        mapHeight: 100,
+        mapChangedSignal: 0,
     }),
     getters: {
         hours: (state) => Math.floor(state.time / 60),
@@ -65,6 +75,21 @@ export const useWorldStore = defineStore('world', {
 
         setMapLoaded(loaded: boolean) {
             this.isMapLoaded = loaded;
+        },
+
+        /**
+         * Met à jour les dimensions et l'ID de la carte active
+         */
+        setMapInfo(id: string, width: number, height: number) {
+            // [Hotfix 16.1] Nettoyage Strict du Store (Table rase)
+            // On vide les anciens tableaux/dictionnaires AVANT d'assigner la suite
+            this.serverObjects = [];
+            this.otherPlayers = {};
+
+            this.mapId = id;
+            this.mapWidth = width;
+            this.mapHeight = height;
+            this.mapChangedSignal++;
         },
 
         /**

@@ -200,3 +200,14 @@
 | 10.2 | 24/02/2026 | Fix du Multijoueur : Handshake de présence (Join/Leave), génération d'UUID strict et rendu des sprites distants |
 | 10.3 | 24/02/2026 | Fix du Rendu Multijoueur : Conversion isométrique des coordonnées des autres joueurs, Z-Sorting et instanciation des sprites distants |
 | 10.4 | 25/02/2026 | Fix du Multijoueur : Envoi de la PLAYERS_LIST au démarrage pour afficher les joueurs déjà connectés après un rechargement de page |
+| 13.0 | 25/02/2026 | Migration PostgreSQL : Création de database.py, modèles SQLAlchemy (User, WorldItem) et préparation de l'API. |
+| 14.0 | 25/02/2026 | Architecture Multi-Maps : Refactoring du GameState en Rooms, isolation du broadcast WebSocket par map, et création de ACTION_CHANGE_MAP. |
+| 14.1 | 25/02/2026 | Fix BDD : Pivot vers SQLite asynchrone (aiosqlite) pour l'environnement de développement local, création automatique des tables au démarrage de FastAPI. |
+| 15.0 | 26/02/2026 | Transition Multi-Maps Frontend : Ajout UI de voyage, écoute du MAP_STATE pour reset complet de la scène Phaser (nettoyage ObjectManager, redessin MapManager). |
+| 16.0 | 26/02/2026 | Génération Housing : Séparation de la génération backend (Farm procédural vs Housing plat 30x30), adaptation des limites de la caméra Phaser et recalibrage du point de spawn lors du voyage. |
+| 16.1 | 02/03/2026 | Hotfix Transition Map : Implémentation du "Clean Slate" (vidage des stores Pinia et destruction stricte des sprites Phaser via clear(true,true)) pour éviter la superposition des mondes. |
+| 16.2 | 02/03/2026 | Fix Définitif Transition : Implémentation du nettoyage profond de la scène Phaser (destruction stricte des GameObjects ou Scene.restart()) pour corriger le state leakage inter-maps. |
+| 16.3 | 02/03/2026 | Option Nucléaire : Remplacement du nettoyage manuel par `scene.restart()`. Phaser détruit tout et rappelle `create()` avec le store Pinia pré-chargé. Suppression du watcher Vue, détection transition vs premier chargement via `mapChangedSignal`. |
+| 16.4 | 02/03/2026 | Rollback Multi-Maps : Abandon temporaire du routage multi-maps pour des raisons de stabilité. Sécurisation des méthodes de destruction (Null checks dans TileManager et ObjectManager) et retour imposé à la map unique 100x100 (`farm_main`). |
+| 17.0 | 02/03/2026 | Refonte Visuelle : Import des nouveaux assets graphiques, nettoyage du preloader, mise à jour des clés de textures dans les Managers et recalibrage des points d'ancrage isométriques (setOrigin). |
+| 17.1 | 02/03/2026 | Polish Isométrique : Correction des artefacts d'escalier via Math.round() et ajustement des dimensions IsoMath. Alignement strict des objets avec setOrigin(0.5, 1) calé sur le bord inférieur des tuiles. |

@@ -46,6 +46,30 @@ class WorldObject(BaseModel):
 
 # ─────────────────── Sessions (Legacy, conservé) ───────────────────
 
-class GameStateModel(BaseModel):
-    """Snapshot complet des joueurs connectés (non utilisé en WebSocket direct)."""
-    players: Dict[str, PlayerState]
+# ─────────────────── Modèles SQLAlchemy (PostgreSQL) ───────────────────
+
+from sqlalchemy import Column, String, Float, Integer, JSON
+from backend.database import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, index=True) # ID unique du joueur (ex: token auth)
+    username = Column(String, nullable=True)          # Pseudo
+    position_x = Column(Float, default=10.0)          # X grille isométrique
+    position_y = Column(Float, default=10.0)          # Y grille isométrique
+    map_id = Column(String, default="main")           # Carte courante (ex: surface, cave)
+    wallet = Column(JSON, default=dict)               # Monnaie locale (ex: wood, stone)
+    inventory = Column(JSON, default=dict)            # Inventaire local du personnage
+
+class WorldItem(Base):
+    __tablename__ = "world_items"
+
+    id = Column(String, primary_key=True, index=True) # ID original ex: "tree_X_Y"
+    item_type = Column(String, index=True)            # Type de collision: 'obstacle', 'floor'
+    asset = Column(String, index=True)                # Asset visuel (ex: tree, stone)
+    position_x = Column(Integer)                      # X grille
+    position_y = Column(Integer)                      # Y grille
+    map_id = Column(String, default="main")           # Carte d'appartenance
+    owner_id = Column(String, nullable=True)          # Si placé par un joueur, son ID (pour les permissions)
+

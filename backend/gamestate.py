@@ -152,164 +152,158 @@ def _generate_world(seed: int) -> List[Dict[str, Any]]:
 
 WORLD_FILE = os.path.join("backend", "data", "world.json")
 
-class GameState:
-    def __init__(self):
-        """Initialise l'état du monde avec génération procédurale ou depuis une sauvegarde."""
-        self.resources = []
-        
-        if os.path.exists(WORLD_FILE):
-            try:
-                import json
-                with open(WORLD_FILE, "r") as f:
-                    self.resources = json.load(f)
-                print(f"[GameState] Monde chargé depuis {WORLD_FILE} ({len(self.resources)} objets).")
-            except Exception as e:
-                print(f"[GameState] Erreur de lecture de {WORLD_FILE}: {e}")
-                
-        if not self.resources:
-            self.resources: List[Dict[str, Any]] = _generate_world(WORLD_SEED)
-            self.save_world()
-
-        # Index spatial pour les lookups O(1) : (x, y) → ressource
+class RoomState:
+    def __init__(self, map_id: str, resources: List[Dict[str, Any]], width: int = 100, height: int = 100):
+        self.map_id = map_id
+        self.resources = resources
+        self.width = width
+        self.height = height
         self._spatial_index: Dict[tuple, Dict[str, Any]] = {
             (r["x"], r["y"]): r for r in self.resources
         }
+
+def generate_room_state(map_id: str, seed: int) -> RoomState:
+    if map_id.startswith("housing_"):
+        return RoomState(map_id, [], 30, 30)
+    else:
+        resources = _generate_world(seed)
+        return RoomState(map_id, resources, 100, 100)
+
+class GameState:
+    def __init__(self):
+        """Initialise l'état du monde avec génération procédurale multi-maps."""
+        self.maps: Dict[str, RoomState] = {}
+        
+        self.maps["farm_main"] = generate_room_state("farm_main", WORLD_SEED)
+        self.maps["housing_hub_1"] = generate_room_state("housing_hub_1", WORLD_SEED)
+        
+
         
     def save_world(self):
-        """Sauvegarde l'état du monde de manière persistante."""
-        import json
-        os.makedirs(os.path.dirname(WORLD_FILE), exist_ok=True)
-        try:
-            with open(WORLD_FILE, "w") as f:
-                json.dump(self.resources, f, indent=4)
-        except Exception as e:
-            print(f"[GameState] Erreur lors de la sauvegarde: {e}")
+        """[WIP] Legacy save not fully supported with Multi-Map yet."""
+        pass 
+
+    # --- Futures méthodes asynchrones (PostgreSQL) ---
+    async def load_from_db(self, session):
+        """[WIP] Charge l'état du monde depuis la BDD (table world_items)"""
+        pass
+        
+    async def save_to_db(self, session):
+        """[WIP] Synchronise l'état en RAM vers la BDD"""
+        pass
 
     # ─────────────────── Lecture ───────────────────
 
-    def get_full_state(self) -> Dict[str, Any]:
-        """Retourne l'état complet du monde pour synchronisation initiale."""
-        return {"resources": self.resources}
+    def get_full_state(self, map_id: str = "farm_main") -> Dict[str, Any]:
+        """Retourne l'état complet du monde pour synchronisation initiale pour la room spécifiée."""
+        if map_id not in self.maps:
+            self.maps[map_id] = generate_room_state(map_id, WORLD_SEED)
+            
+        room = self.maps[map_id]
+        return {
+            "map_id": room.map_id,
+            "width": room.width,
+            "height": room.height,
+            "resources": room.resources
+        }
 
-    def get_resource_at(self, x: int, y: int) -> Optional[Dict[str, Any]]:
+    def get_resource_at(self, map_id: str, x: int, y: int) -> Optional[Dict[str, Any]]:
         """Retourne la ressource à (x, y) ou None — O(1) grâce à l'index spatial."""
-        return self._spatial_index.get((x, y))
+        if map_id not in self.maps:
+            return None
+        return self.maps[map_id]._spatial_index.get((x, y))
 
     # ─────────────────── Écriture ───────────────────
 
-    def remove_resource_at(self, x: int, y: int) -> Optional[Dict[str, Any]]:
+    def remove_resource_at(self, map_id: str, x: int, y: int) -> Optional[Dict[str, Any]]:
         """
         Supprime la ressource aux coordonnées données.
         Met à jour la liste ET l'index spatial.
         Retourne l'objet complet ou None si rien à supprimer.
         """
-        res = self._spatial_index.pop((x, y), None)
+        room = self.maps.get(map_id)
+        if not room:
+            return None
+            
+        res = room._spatial_index.pop((x, y), None)
         if res is not None:
             try:
-                self.resources.remove(res)
-                self.save_world()
+                room.resources.remove(res)
             except ValueError:
                 pass  # Déjà absent — incohérence ignorée silencieusement
         return res
 
-    def harvest_resource(self, player_id: str, resource_id: str, equipped_tool: str, user_manager: Any) -> Optional[Union[tuple[Dict[str, Any], Dict[str, int], Dict[str, int]], str]]:
+    def harvest_resource(self, player_id: str, map_id: str, resource_id: str, equipped_tool: str, user_manager: Any) -> Optional[Union[tuple[Dict[str, Any], Dict[str, int], Dict[str, int]], str]]:
         """
-        Gère la logique de récolte côté serveur (autorité serveur).
-
-        Validations :
-        1. La ressource doit exister dans le monde.
-        2. La distance joueur ↔ ressource doit être ≤ 3 cases (grille).
-        3. Vérifie l'outil équipé transmis par le client (Session 9.5 & 9.6).
-
-        Comportements spéciaux :
-        - apple_tree : donne une pomme mais NE DÉTRUIT PAS l'arbre.
-        - Autres : détruit la ressource et donne le loot correspondant.
-
-        Retourne un tuple (resource_affectée, nouveau_wallet, loot) ou une string erreur si refus.
+        Gère la logique de récolte côté serveur (autorité serveur) sur une carte spécifique.
         """
         import math
 
-        # ── Trouver le joueur ──────────────────────────────────────────────────
         user = user_manager.get_or_create_user(player_id)
-        # Les coordonnées stockées dans l'UserManager sont en grille isométrique (cases)
-        # PLAYER_MOVE envoie les coords grille depuis MainScene → update_user_position
         px = float(user.get("x", 0))
         py = float(user.get("y", 0))
 
-        # ── Trouver la ressource ───────────────────────────────────────────────
-        target = next((r for r in self.resources if r["id"] == resource_id), None)
+        room = self.maps.get(map_id)
+        if not room:
+            return "Carte introuvable."
+
+        target = next((r for r in room.resources if r["id"] == resource_id), None)
         if not target:
-            print(f"[GameState] Récolte refusée pour {player_id}: ressource '{resource_id}' introuvable.")
             return "Ressource introuvable."
 
         rx, ry = float(target["x"]), float(target["y"])
         asset  = target.get("asset", "")
 
-        # ── Validation distance stricte (≤ 3 cases) ───────────────────────────
         dist = math.hypot(px - rx, py - ry)
         MAX_HARVEST_DIST = 3.0
         if dist > MAX_HARVEST_DIST:
-            print(f"[GameState] Récolte refusée pour {player_id}: trop loin "
-                  f"(player=({px:.1f},{py:.1f}), resource=({rx},{ry}), dist={dist:.2f}).")
             return "Cible trop éloignée."
 
-        # ── Vérification de l'outil équipé (Session 9.5) ──────────────────────
         if asset == "tree" and equipped_tool != "axe":
-            print(f"[GameState] Récolte refusée pour {player_id} : 'axe' requis, '{equipped_tool}' reçu.")
             return "Outil inadapté. Hache requise."
         if asset == "rock" and equipped_tool != "pickaxe":
-            print(f"[GameState] Récolte refusée pour {player_id} : 'pickaxe' requis, '{equipped_tool}' reçu.")
             return "Outil inadapté. Pioche requise."
         if asset in ["clay_node", "clay_mound"] and equipped_tool != "shovel":
-            print(f"[GameState] Récolte refusée pour {player_id} : 'shovel' requis, '{equipped_tool}' reçu.")
             return "Outil inadapté. Pelle requise."
-        # cotton_bush peut être récolté avec gants ou knife, ce qui rend la validation difficile
-        # si on ne passe qu'un seul outil depuis le client. Pour le MVP, on se fie au client pour cotton_bush.
 
-        # ── Comportement SPÉCIAL : Pommier (sans destruction) ─────────────────
         if asset == "apple_tree":
             loot = {"apple": 1}
             new_wallet = None
             for res_type, amount in loot.items():
                 new_wallet = user_manager.update_wallet(player_id, res_type, amount)
-            print(f"[GameState] {player_id} récolte une pomme sur l'apple_tree {resource_id}.")
-            # On retourne l'arbre lui-même (non supprimé) comme référence de position
             return target, new_wallet or {}, loot
 
-        # ── Suppression de la ressource du monde ──────────────────────────────
-        removed = self.remove_resource_at(int(rx), int(ry))
+        removed = self.remove_resource_at(map_id, int(rx), int(ry))
         if not removed:
             return "Erreur lors de la suppression de la ressource."
 
-        # ── Table de loot ──────────────────────────────────────────────────────
         loot: Dict[str, int] = {}
         if asset == "tree":
             loot = {"wood": 1}
         elif asset == "rock":
             loot = {"stone": 1}
         elif asset == "clay_node":
-            loot = {"stone": 1}   # raw_clay traité en stone pour l'économie serveur MVP
+            loot = {"stone": 1}   
         elif asset == "cotton_bush":
             loot = {"cotton_plant": 1}
         else:
-            loot = {"wood": 1}   # Fallback générique
+            loot = {"wood": 1}
 
-        # ── Mise à jour du wallet ──────────────────────────────────────────────
         new_wallet = None
         for res_type, amount in loot.items():
             new_wallet = user_manager.update_wallet(player_id, res_type, amount)
 
-        print(f"[GameState] {player_id} récolte {loot} sur '{asset}' ({resource_id}).")
         return removed, new_wallet or {}, loot
 
-    def add_resource(self, asset: str, obj_type: str, x: int, y: int) -> Optional[Dict[str, Any]]:
+    def add_resource(self, asset: str, obj_type: str, x: int, y: int, map_id: str = "farm_main") -> Optional[Dict[str, Any]]:
         """
         Ajoute une ressource au monde (ex: construction joueur).
-        - Vérifie la collision via l'index spatial O(1).
-        - Génère un ID unique horodaté.
-        Retourne l'objet créé ou None si collision.
         """
-        if (x, y) in self._spatial_index:
+        room = self.maps.get(map_id)
+        if not room:
+            return None
+            
+        if (x, y) in room._spatial_index:
             return None  # Case occupée
 
         new_id = f"{asset}_{x}_{y}_{int(time.time())}"
@@ -321,7 +315,6 @@ class GameState:
             "y":     y,
         }
 
-        self.resources.append(new_resource)
-        self._spatial_index[(x, y)] = new_resource
-        self.save_world()
+        room.resources.append(new_resource)
+        room._spatial_index[(x, y)] = new_resource
         return new_resource

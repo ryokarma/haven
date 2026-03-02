@@ -63,11 +63,8 @@ export class TileManager {
         this.scene = scene;
         this.tileGroup = scene.add.group();
         this.tileVariations = [
-            'tile_flat_0',
-            'tile_flat_1',
-            'tile_flat_2',
-            'tile_flat_3',
-            'tile_flat_4'
+            'grass-1',
+            'grass-2'
         ];
     }
 
@@ -264,6 +261,8 @@ export class TileManager {
      * Détruit le gestionnaire de tuiles
      */
     destroy(): void {
-        this.tileGroup.clear(true, true);
+        if (this.tileGroup) {
+            this.tileGroup.clear(true, true);
+        }
     }
 }

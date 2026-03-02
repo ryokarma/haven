@@ -45,6 +45,14 @@ export class InputManager {
         this.setupListeners();
     }
 
+    /**
+     * Met à jour l'origine de la carte (utile pour le changement de carte)
+     */
+    public setOrigin(mapOriginX: number, mapOriginY: number): void {
+        this.mapOriginX = mapOriginX;
+        this.mapOriginY = mapOriginY;
+    }
+
     private setupListeners(): void {
         // Désactive le menu contextuel par défaut (Clic droit)
         this.scene.input.mouse?.disableContextMenu();

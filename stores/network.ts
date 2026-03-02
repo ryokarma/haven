@@ -39,6 +39,13 @@ export const useNetworkStore = defineStore('network', () => {
     }
 
     /**
+     * Nettoie tous les listeners
+     */
+    function clearMessages() {
+        onMessageCallbacks.value = [];
+    }
+
+    /**
      * Traite un message entrant
      */
     function handleMessage(data: string) {
@@ -228,6 +235,7 @@ export const useNetworkStore = defineStore('network', () => {
         listenForEconomy,
         listenForChatMessages,
         listenForErrors,
-        onMessage
+        onMessage,
+        clearMessages
     };
 });

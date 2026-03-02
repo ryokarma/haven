@@ -56,14 +56,21 @@ export class MainScene extends Scene {
     // Input Manager
     private inputManager!: InputManager;
 
+    private currentMapId: string = "farm_main";
+
     constructor() {
         super('MainScene');
     }
 
     preload() {
         // Chargement des assets externes
-        this.load.image('tree', '/assets/tree.png');
-        this.load.image('rock', '/assets/rock.png');
+        this.load.image('tree-1', '/assets/tree-1.png');
+        this.load.image('rock-1', '/assets/rock-1.png');
+        this.load.image('grass-1', '/assets/grass-1.png');
+        this.load.image('grass-2', '/assets/grass-2.png');
+        this.load.image('dirt-1', '/assets/dirt-1.png');
+        this.load.image('dirt-2', '/assets/dirt-2.png');
+        this.load.image('hero', '/assets/hero.png');
         // Fallback or generated assets
         // Génération des textures procédurales
         this.textureGenerator = new TextureGenerator(this);
@@ -74,6 +81,11 @@ export class MainScene extends Scene {
         this.playerStore = usePlayerStore();
         this.worldStore = useWorldStore();
         this.buildStore = useBuildStore();
+
+        this.currentMapId = "farm_main";
+
+        // [16.4] Rollback: Retour à une seule map 100x100
+        GameConfig.MAP_SIZE = 100;
 
         // Réinitialiser le mode placement au démarrage par sécurité
         this.playerStore.setPlacementMode(false);
@@ -185,6 +197,15 @@ export class MainScene extends Scene {
         // 1. Centrage immédiat (Teleport) pour éviter le traveling au chargement
         this.cameras.main.centerOn(this.player.getSprite().x, this.player.getSprite().y);
 
+        // Application des limites de la caméra en respectant le contour ISOMETRIQUE approx
+        const boundW = GameConfig.MAP_SIZE * IsoMath.TILE_WIDTH;
+        const boundH = GameConfig.MAP_SIZE * IsoMath.TILE_HEIGHT;
+        const boundX = this.mapOriginX - (GameConfig.MAP_SIZE * (IsoMath.TILE_WIDTH / 2));
+        const boundY = this.mapOriginY;
+
+        // Marge de 150px pour laisser voir les bords
+        this.cameras.main.setBounds(boundX - 150, boundY - 150, boundW + 300, boundH + 300);
+
         // 2. Suivi fluide (Lerp) + Deadzone (Zone morte au centre)
         this.cameras.main.startFollow(
             this.player.getSprite(),
@@ -238,6 +259,10 @@ export class MainScene extends Scene {
 
         // --- MULTIJOUEUR ---
         const networkStore = useNetworkStore();
+
+        // [16.3] Nuclear: Purger TOUS les anciens listeners pour éviter les doublons après scene.restart()
+        networkStore.clearMessages();
+
         networkStore.listenForEconomy(); // Start listening for economy and craft success
         networkStore.listenForErrors(); // Start listening for server errors
 
@@ -289,21 +314,15 @@ export class MainScene extends Scene {
                 const remoteIso = IsoMath.gridToIso(msg.x, msg.y, this.mapOriginX, this.mapOriginY);
                 this.objectManager.moveRemotePlayer(msg.id, remoteIso.x, remoteIso.y);
             }
-            else if (msg.type === 'WORLD_STATE') {
+            else if (msg.type === 'WORLD_STATE' || msg.type === 'MAP_STATE') {
                 if (msg.payload && msg.payload.resources && Array.isArray(msg.payload.resources)) {
-                    // 1. Stocker l'état de manière réactive dans le worldStore (source de vérité Pinia)
+                    // Même carte — flow normal (WORLD_STATE initial ou refresh)
                     this.worldStore.loadWorldState(msg.payload);
-
-                    // 2. Instancier visuellement les objets via MapManager → ObjectManager.syncWorldObjects()
-                    //    (nettoyage des doublons + placement sur la carte isométrique inclus)
                     this.mapManager.populateFromState(msg.payload.resources);
-
-                    // 3. Mettre à jour la grille de pathfinding avec les nouvelles collisions
                     this.pathfindingManager.updateGrid(this.mapManager.gridData);
-
                     console.log(`[MainScene] WORLD_STATE appliqué : ${msg.payload.resources.length} objet(s) placé(s).`);
                 } else {
-                    console.warn('[MainScene] WORLD_STATE reçu mais payload.resources absent ou vide.', msg);
+                    console.warn('[MainScene] WORLD_STATE/MAP_STATE reçu mais payload absent ou vide.', msg);
                 }
             }
             else if (msg.type === 'RESOURCE_PLACED') {
@@ -400,9 +419,7 @@ export class MainScene extends Scene {
 
         // --- HANDSHAKE : Demande explicite de l'état du monde ---
         // On envoie cette requête une fois que TOUS les listeners sont enregistrés.
-        // Le serveur ne pousse plus WORLD_STATE automatiquement (Session 8.3).
-        // Cela garantit que la scène Phaser est prête à recevoir et traiter les données.
-        console.log('[MainScene] Envoi de REQUEST_WORLD_STATE (handshake)...');
+        console.log('[MainScene] Envoi de REQUEST_WORLD_STATE (handshake initial)...');
         networkStore.send('REQUEST_WORLD_STATE');
 
         // Cleanup on shutdown

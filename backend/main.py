@@ -3,8 +3,9 @@ Haven — Backend Principal
 FastAPI + WebSocket — MVP Alpha 0.1
 """
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict
 import json
 import time
@@ -12,11 +13,19 @@ import time
 from backend.gamestate import GameState
 from backend.usermanager import UserManager
 from backend import recipes
+from backend.database import get_db, engine, Base
+import backend.models
 
 # ──────────────────────────────────────────────
 # 1. Application & CORS
 # ──────────────────────────────────────────────
 app = FastAPI(title="Haven Backend", version="0.1.0")
+
+@app.on_event("startup")
+async def startup():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    print("[DB] Tables SQLite créées ou vérifiées.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,62 +47,66 @@ userManager = UserManager()
 # ──────────────────────────────────────────────
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[str, WebSocket] = {}
+        self.active_sessions: Dict[str, Dict[str, Any]] = {}
 
     async def connect(self, websocket: WebSocket, client_id: str):
         await websocket.accept()
+        
+        user = userManager.get_or_create_user(client_id)
+        # [16.4] Force user map to farm_main
+        user["map_id"] = "farm_main"
+        current_map = "farm_main"
 
-        self.active_connections[client_id] = websocket
-        print(f"[WS] Client {client_id} connected ({len(self.active_connections)} total)")
+        self.active_sessions[client_id] = {"ws": websocket, "map_id": current_map}
+        print(f"[WS] Client {client_id} connected to {current_map} ({len(self.active_sessions)} total)")
 
-        # Note (Session 10.4): Cette liste est maintenant envoyée aussi lors de REQUEST_WORLD_STATE
-        # pour éviter la race condition où ce message arrive avant que la scène Phaser ne soit prête.
         current_players_data = []
-        for cid in self.active_connections.keys():
-            if cid != client_id:
-                user = userManager.get_or_create_user(cid)
-                current_players_data.append({"id": cid, "x": user.get("x", 10), "y": user.get("y", 10)})
+        for cid, info in self.active_sessions.items():
+            if cid != client_id and info["map_id"] == current_map:
+                u = userManager.get_or_create_user(cid)
+                current_players_data.append({"id": cid, "x": u.get("x", 10), "y": u.get("y", 10)})
         
         await websocket.send_text(json.dumps({
             "type": "CURRENT_PLAYERS",
             "players": current_players_data
         }))
 
-        # Notifier les autres
         joined_user = userManager.get_or_create_user(client_id)
         await self.broadcast(json.dumps({
             "type": "PLAYER_JOINED",
             "id": client_id,
             "x": joined_user.get("x", 10),
             "y": joined_user.get("y", 10)
-        }), exclude_id=client_id)
+        }), map_id=current_map, exclude_id=client_id)
 
     def disconnect(self, client_id: str):
-        if client_id in self.active_connections:
-            del self.active_connections[client_id]
+        if client_id in self.active_sessions:
+            del self.active_sessions[client_id]
             print(f"[WS] Client {client_id} disconnected")
 
-    async def broadcast(self, message: str, exclude_id: str = None):
-        """Envoie un message à tous les clients connectés (sauf exclude_id)."""
+    async def broadcast(self, message: str, map_id: str, exclude_id: str = None):
+        """Envoie un message à tous les clients connectés sur une carte spécifique."""
         disconnected = []
-        for cid, ws in self.active_connections.items():
-            if cid != exclude_id:
+        for cid, info in self.active_sessions.items():
+            if cid != exclude_id and info["map_id"] == map_id:
                 try:
-                    await ws.send_text(message)
+                    await info["ws"].send_text(message)
                 except Exception:
                     disconnected.append(cid)
-        # Nettoyage des connexions mortes
         for cid in disconnected:
             self.disconnect(cid)
 
     async def send_to(self, client_id: str, message: str):
         """Envoie un message à un client spécifique."""
-        ws = self.active_connections.get(client_id)
-        if ws:
+        if client_id in self.active_sessions:
             try:
-                await ws.send_text(message)
+                await self.active_sessions[client_id]["ws"].send_text(message)
             except Exception:
                 self.disconnect(client_id)
+                
+    def set_player_map(self, client_id: str, new_map_id: str):
+        if client_id in self.active_sessions:
+            self.active_sessions[client_id]["map_id"] = new_map_id
 
 
 manager = ConnectionManager()
@@ -120,6 +133,8 @@ def determine_harvest_resource(asset: str) -> str:
 # ──────────────────────────────────────────────
 
 @app.websocket("/ws/{client_id}")
+# [WIP] DB Injection (Session 13.0)
+# async def websocket_endpoint(websocket: WebSocket, client_id: str, db: AsyncSession = Depends(get_db)):
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     await manager.connect(websocket, client_id)
 
@@ -135,6 +150,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     try:
         while True:
             raw = await websocket.receive_text()
+            current_map = manager.active_sessions.get(client_id, {}).get("map_id", "farm_main")
 
             try:
                 msg = json.loads(raw)
@@ -158,7 +174,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     id=client_id,
                     x=x,
                     y=y
-                ), exclude_id=client_id)
+                ), map_id=current_map, exclude_id=client_id)
 
             # ──────────── ACTION_HARVEST (Récolte Serveur) ────────────
             elif msg_type == "ACTION_HARVEST":
@@ -170,7 +186,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     await websocket.send_text(make_msg("ERROR", message="resource_id manquant"))
                     continue
 
-                harvest_result = gameState.harvest_resource(client_id, resource_id, equipped_tool, userManager)
+                harvest_result = gameState.harvest_resource(client_id, current_map, resource_id, equipped_tool, userManager)
 
                 if isinstance(harvest_result, str):
                     # Refus avec motif précis généré par gameState
@@ -199,18 +215,18 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 is_apple_tree = affected_res.get("asset") == "apple_tree"
                 if not is_apple_tree:
                     # Cas normal : la ressource a été retirée du monde
-                    # Diffuse le nouveau WORLD_STATE à TOUS les clients (diff côté client)
+                    # Diffuse le nouveau WORLD_STATE à TOUS les clients de la map (diff côté client)
                     await manager.broadcast(make_msg(
                         "WORLD_STATE",
-                        payload=gameState.get_full_state()
-                    ))
+                        payload=gameState.get_full_state(current_map)
+                    ), map_id=current_map)
                     # Compatibilité legacy : signal de suppression explicite
                     await manager.broadcast(make_msg(
                         "RESOURCE_REMOVED",
                         id=affected_res["id"],
                         x=affected_res["x"],
                         y=affected_res["y"]
-                    ))
+                    ), map_id=current_map)
                 # Sinon pour apple_tree : on ne fait rien de plus,
                 # l'arbre reste dans le WORLD_STATE, aucun WORLD_STATE à rebrod.
                     
@@ -221,7 +237,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 if x is None or y is None:
                     continue
 
-                removed = gameState.remove_resource_at(x, y)
+                removed = gameState.remove_resource_at(current_map, x, y)
 
                 if removed:
                     # Gain de ressource
@@ -239,7 +255,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                         id=removed["id"],
                         x=x,
                         y=y
-                    ))
+                    ), map_id=current_map)
                 # else: Rien à récolter, on ignore silencieusement
 
             # ──────────── ACTION_CRAFT (Artisanat Autoritaire) ────────────
@@ -303,7 +319,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     asset=target_asset,
                     obj_type=target_type,
                     x=x,
-                    y=y
+                    y=y,
+                    map_id=current_map
                 )
                 
                 if not new_res:
@@ -315,7 +332,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 await manager.broadcast(make_msg(
                     "RESOURCE_PLACED",
                     resource=new_res
-                ))
+                ), map_id=current_map)
                 await websocket.send_text(make_msg("PLACE_SUCCESS", payload={"itemId": item_id}))
 
             # ──────────── PLAYER_BUILD (Construction) ────────────
@@ -354,9 +371,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     asset=recipe["asset"],
                     obj_type=recipe["type"],
                     x=x,
-                    y=y
+                    y=y,
+                    map_id=current_map
                 )
-
+    
                 if not new_res:
                     # Collision — Rembourser le joueur
                     userManager.update_wallet(client_id, resource_type, cost_amount)
@@ -379,12 +397,12 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 await manager.broadcast(make_msg(
                     "RESOURCE_PLACED",
                     resource=new_res
-                ))
+                ), map_id=current_map)
 
             # ──────────── REQUEST_WORLD_STATE (Handshake) ────────────
             elif msg_type == "REQUEST_WORLD_STATE":
-                print(f"[WS] Client {client_id} requests WORLD_STATE (handshake)")
-                world_state = gameState.get_full_state()
+                print(f"[WS] Client {client_id} requests WORLD_STATE for {current_map}")
+                world_state = gameState.get_full_state(current_map)
                 await manager.send_to(client_id, make_msg(
                     "WORLD_STATE",
                     payload=world_state
@@ -393,8 +411,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                 # Session 10.4 : On renvoie les joueurs déjà connectés ici
                 # car le client est enfin prêt à les afficher (sa scène Phaser écoute)
                 current_players_data = []
-                for cid in manager.active_connections.keys():
-                    if cid != client_id:
+                for cid, info in manager.active_sessions.items():
+                    if cid != client_id and info["map_id"] == current_map:
                         user = userManager.get_or_create_user(cid)
                         current_players_data.append({"id": cid, "x": user.get("x", 10), "y": user.get("y", 10)})
                 
@@ -414,12 +432,19 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
                     sender=client_id,
                     text=text,
                     timestamp=time.time()
-                ))
+                ), map_id=current_map)
+                
+            # ──────────── ACTION_CHANGE_MAP ────────────
+            elif msg_type == "ACTION_CHANGE_MAP":
+                # [16.4] Rollback: Map transition disabled
+                await websocket.send_text(make_msg("ERROR", message="Le voyage inter-cartes est temporairement désactivé."))
 
     except WebSocketDisconnect:
+        current_m = manager.active_sessions.get(client_id, {}).get("map_id", "farm_main")
         manager.disconnect(client_id)
-        await manager.broadcast(make_msg("PLAYER_LEFT", id=client_id))
+        await manager.broadcast(make_msg("PLAYER_LEFT", id=client_id), map_id=current_m)
     except Exception as e:
         print(f"[WS] Error for {client_id}: {e}")
+        current_m = manager.active_sessions.get(client_id, {}).get("map_id", "farm_main")
         manager.disconnect(client_id)
-        await manager.broadcast(make_msg("PLAYER_LEFT", id=client_id))
+        await manager.broadcast(make_msg("PLAYER_LEFT", id=client_id), map_id=current_m)

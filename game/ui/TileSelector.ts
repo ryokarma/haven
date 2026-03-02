@@ -24,6 +24,15 @@ export class TileSelector {
     }
 
     /**
+     * Met à jour les propriétés de la carte (pour le changement de carte)
+     */
+    setMapProperties(mapOriginX: number, mapOriginY: number, gridSize: number): void {
+        this.mapOriginX = mapOriginX;
+        this.mapOriginY = mapOriginY;
+        this.gridSize = gridSize;
+    }
+
+    /**
      * Crée le réticule (Curseur Graphique)
      */
     private createReticle(): void {
@@ -86,9 +95,7 @@ export class TileSelector {
             // On peut garder le blanc par défaut, ou passer au rouge si bloqué ?
             // L'instruction : "On ne veut voir QUE la case survolée."
 
-            const isWalkable = gridData[coords.y] &&
-                gridData[coords.y][coords.x] !== undefined &&
-                gridData[coords.y][coords.x] === 0;
+            const isWalkable = gridData?.[coords.y]?.[coords.x] === 0;
 
             if (!isWalkable) {
                 // Optionnel : Rouge si bloqué, mais "subtil" demandé.

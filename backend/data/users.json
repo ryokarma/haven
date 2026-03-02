@@ -96,5 +96,57 @@
             "wood": 0,
             "stone": 0
         }
+    },
+    "80d36cf0-f8dc-49d2-a960-2541c52f2a0c": {
+        "id": "80d36cf0-f8dc-49d2-a960-2541c52f2a0c",
+        "x": 5,
+        "y": 5,
+        "wallet": {
+            "wood": 0,
+            "stone": 0
+        },
+        "map_id": "farm_main"
+    },
+    "c4d0e453-0597-47c7-af78-443237439ce4": {
+        "id": "c4d0e453-0597-47c7-af78-443237439ce4",
+        "x": 50,
+        "y": 50,
+        "wallet": {
+            "wood": 1,
+            "stone": 0,
+            "cotton_plant": 1,
+            "apple": 7
+        },
+        "map_id": "farm_main"
+    },
+    "dcc7ee0b-e1f4-4d0f-b038-cd349fc931d5": {
+        "id": "dcc7ee0b-e1f4-4d0f-b038-cd349fc931d5",
+        "x": 25,
+        "y": 14,
+        "wallet": {
+            "wood": 0,
+            "stone": 0
+        },
+        "map_id": "farm_main"
+    },
+    "8c8567d7-673a-409e-9ac8-1d89d940d4d0": {
+        "id": "8c8567d7-673a-409e-9ac8-1d89d940d4d0",
+        "x": 8,
+        "y": 5,
+        "wallet": {
+            "wood": 0,
+            "stone": 0
+        },
+        "map_id": "farm_main"
+    },
+    "c3a13da6-8bc6-424b-b4a1-63f9309e3ace": {
+        "id": "c3a13da6-8bc6-424b-b4a1-63f9309e3ace",
+        "x": 8,
+        "y": 7,
+        "wallet": {
+            "wood": 0,
+            "stone": 0
+        },
+        "map_id": "farm_main"
     }
 }
