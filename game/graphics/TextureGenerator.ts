@@ -107,48 +107,6 @@ export class TextureGenerator {
                 g.destroy();
             }
         });
-
-        // Sol de la maison
-        if (!this.scene.textures.exists('floor_wood')) {
-            const g = this.scene.make.graphics({ x: 0, y: 0 });
-            g.fillStyle(0x8D6E63, 1);
-            g.beginPath();
-            g.moveTo(W / 2, 0);
-            g.lineTo(W, H / 2);
-            g.lineTo(W / 2, H);
-            g.lineTo(0, H / 2);
-            g.closePath();
-            g.fillPath();
-            // Contour subtil pour la maison
-            const SHOW_DEBUG_GRID = false;
-            if (SHOW_DEBUG_GRID) {
-                g.lineStyle(1, 0x5D4037, 0.5);
-                g.strokePath();
-            }
-            g.generateTexture('floor_wood', W, H);
-            g.destroy();
-        }
-
-        // Toit de la maison
-        if (!this.scene.textures.exists('house_roof')) {
-            const totalW = GameConfig.HOUSE.width * W;
-            const totalH = GameConfig.HOUSE.height * H;
-            const cx = totalW / 2;
-
-            const g = this.scene.make.graphics({ x: 0, y: 0 });
-            g.fillStyle(0x37474F, 1);
-            g.beginPath();
-            g.moveTo(cx, 0);
-            g.lineTo(totalW, totalH / 2);
-            g.lineTo(cx, totalH);
-            g.lineTo(0, totalH / 2);
-            g.closePath();
-            g.fillPath();
-            g.lineStyle(4, 0x263238, 1);
-            g.strokePath();
-            g.generateTexture('house_roof', totalW, totalH);
-            g.destroy();
-        }
     }
 
     /**

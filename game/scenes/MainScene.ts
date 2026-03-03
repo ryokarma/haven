@@ -7,7 +7,6 @@ import { useChatStore } from '@/stores/chat';
 import { useBuildStore } from '@/stores/build';
 import { IsoMath } from '@/game/utils/IsoMath';
 import { GameConfig } from '@/game/config/GameConfig';
-import { TextureGenerator } from '@/game/graphics/TextureGenerator';
 import { PathfindingManager } from '@/game/managers/PathfindingManager';
 import { TileManager } from '@/game/managers/TileManager';
 import { ObjectManager, RENDER_OFFSETS } from '@/game/managers/ObjectManager';
@@ -35,12 +34,10 @@ export class MainScene extends Scene {
     private saveManager!: SaveManager;
     private mapManager!: MapManager;
     private pathfindingManager!: PathfindingManager;
-    private textureGenerator!: TextureGenerator;
 
     // Entities
     private tileSelector!: TileSelector;
     private player!: Player;
-    private houseRoof?: Phaser.GameObjects.Image;
     private placementGhost: Phaser.GameObjects.Image | null = null;
     private lastGhostIsoX: number = 0;
     private lastGhostIsoY: number = 0;
@@ -64,17 +61,45 @@ export class MainScene extends Scene {
 
     preload() {
         // Chargement des assets externes
-        this.load.image('tree-1', '/assets/tree-1.png');
-        this.load.image('rock-1', '/assets/rock-1.png');
+        // Grass
         this.load.image('grass-1', '/assets/grass-1.png');
         this.load.image('grass-2', '/assets/grass-2.png');
+        this.load.image('grass-3', '/assets/grass-3.png');
+        this.load.image('grass-4', '/assets/grass-4.png');
+        this.load.image('grass-5', '/assets/grass-5.png');
+
+        // Water
+        this.load.image('water-1', '/assets/water-1.png');
+        this.load.image('water-2', '/assets/water-2.png');
+        this.load.image('water-3', '/assets/water-3.png');
+
+        // Vegetation
+        this.load.image('tree-1', '/assets/tree-1.png');
+        this.load.image('tree-2', '/assets/tree-2.png');
+        this.load.image('tree-3', '/assets/tree-3.png');
+        this.load.image('tree-4', '/assets/tree-4.png');
+        this.load.image('appletree-1', '/assets/appletree-1.png');
+        this.load.image('appletree-2', '/assets/appletree-2.png');
+        this.load.image('appletree-3', '/assets/appletree-3.png');
+        this.load.image('baretree-1', '/assets/baretree-1.png');
+        this.load.image('baretree-2', '/assets/baretree-2.png');
+        this.load.image('cotton-1', '/assets/cotton-1.png');
+
+        // Ground elements
         this.load.image('dirt-1', '/assets/dirt-1.png');
         this.load.image('dirt-2', '/assets/dirt-2.png');
+        this.load.image('greyrock-1', '/assets/greyrock-1.png');
+        this.load.image('greyrock-2', '/assets/greyrock-2.png');
+        this.load.image('greyrock-3', '/assets/greyrock-3.png');
+        this.load.image('mossyrock-1', '/assets/mossyrock-1.png');
+        this.load.image('mossyrock-2', '/assets/mossyrock-2.png');
+        this.load.image('mossyrock-3', '/assets/mossyrock-3.png');
+        this.load.image('rock-1', '/assets/rock-1.png');
+        this.load.image('rock-2', '/assets/rock-2.png');
+        this.load.image('rock-3', '/assets/rock-3.png');
+
+        // Player (unchanged as per rules)
         this.load.image('hero', '/assets/hero.png');
-        // Fallback or generated assets
-        // Génération des textures procédurales
-        this.textureGenerator = new TextureGenerator(this);
-        this.textureGenerator.generateAll();
     }
 
     create() {
@@ -169,9 +194,6 @@ export class MainScene extends Scene {
         // Initialisation du pathfinding avec déplacements diagonaux
         this.pathfindingManager = new PathfindingManager(gridData);
 
-        // Création du toit de la maison
-        this.createHouseRoof();
-
         // Création du sélecteur de tuile
         this.tileSelector = new TileSelector(
             this,
@@ -224,10 +246,6 @@ export class MainScene extends Scene {
 
         // Configuration des événements d'entrée via InputManager
         this.setupInputEvents();
-
-        // Vérifier la visibilité du toit
-        const playerPos = this.player.getGridPosition();
-        this.checkRoofVisibility(playerPos.x, playerPos.y);
 
         // Timer pour le système de survie (Faim/Soif/Énergie) - 1s Tick
         this.survivalTimer = this.time.addEvent({
@@ -968,8 +986,6 @@ export class MainScene extends Scene {
         // Consommation d'énergie par pas
         this.playerStore.consumeEnergy(1);
 
-        this.checkRoofVisibility(nextTile.x, nextTile.y);
-
         this.player.animateMoveTo(
             nextTile.x,
             nextTile.y,
@@ -978,33 +994,6 @@ export class MainScene extends Scene {
             () => this.moveNextStep(),
             stepDuration
         );
-    }
-
-    /**
-     * Crée le toit de la maison
-     */
-    private createHouseRoof(): void {
-        const gridCX = GameConfig.HOUSE.x + (GameConfig.HOUSE.width / 2);
-        const gridCY = GameConfig.HOUSE.y + (GameConfig.HOUSE.height / 2);
-        const centerIso = IsoMath.gridToIso(gridCX - 0.5, gridCY - 0.5, this.mapOriginX, this.mapOriginY);
-
-        this.houseRoof = this.add.image(centerIso.x, centerIso.y - 120, 'house_roof');
-        this.houseRoof.setDepth(99999);
-    }
-
-    /**
-     * Vérifie la visibilité du toit selon la position du joueur
-     */
-    private checkRoofVisibility(x: number, y: number): void {
-        if (!this.houseRoof) return;
-
-        // Use mapManager for reuse of logic
-        const isInHouse = this.mapManager.isInsideHouse(x, y);
-        this.tweens.add({
-            targets: this.houseRoof,
-            alpha: isInHouse ? 0.2 : 1,
-            duration: 300
-        });
     }
 
     /**

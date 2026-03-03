@@ -37,6 +37,7 @@ export class TileManager {
     private scene: Phaser.Scene;
     private tileGroup: Phaser.GameObjects.Group;
     private tileVariations: string[];
+    private waterVariations: string[];
 
     // Couleurs pour visualiser les différentes configurations d'auto-tiling (placeholder)
     // Palette bleue pour représenter l'eau avec différentes nuances selon les connexions
@@ -64,7 +65,15 @@ export class TileManager {
         this.tileGroup = scene.add.group();
         this.tileVariations = [
             'grass-1',
-            'grass-2'
+            'grass-2',
+            'grass-3',
+            'grass-4',
+            'grass-5'
+        ];
+        this.waterVariations = [
+            'water-1',
+            'water-2',
+            'water-3'
         ];
     }
 
@@ -179,10 +188,7 @@ export class TileManager {
         if (tileType === TileType.WATER && gridData) {
             const autotileIndex = this.calculateAutotile(x, y, gridData, TileType.WATER);
 
-            // Pour l'instant, appliquer un tint de couleur basé sur l'index
-            // Cela sera remplacé par la sélection de frame/texture appropriée quand les assets seront disponibles
-            const tintColor = this.autotileColors[autotileIndex];
-            tile.setTint(tintColor);
+            // Suppression du tint procédural, on utilise désormais l'image PNG (water-1, water-2, water-3) passée dans key
 
             // Stocker les métadonnées pour debug/futur usage
             tile.setData('autotileIndex', autotileIndex);
@@ -235,9 +241,8 @@ export class TileManager {
 
         if (tileType === TileType.WATER) {
             const autotileIndex = this.calculateAutotile(x, y, gridData, TileType.WATER);
-            const tintColor = this.autotileColors[autotileIndex];
 
-            tile.setTint(tintColor);
+            // Pas de setTint en mode PNG
             tile.setData('autotileIndex', autotileIndex);
             tile.setData('autotileBitmask', this.getBitmaskDescription(autotileIndex));
         }
@@ -248,6 +253,13 @@ export class TileManager {
      */
     getRandomTileKey(): string {
         return Phaser.Math.RND.pick(this.tileVariations);
+    }
+
+    /**
+     * Récupère une texture d'eau aléatoire
+     */
+    getRandomWaterKey(): string {
+        return Phaser.Math.RND.pick(this.waterVariations);
     }
 
     /**

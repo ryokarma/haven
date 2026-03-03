@@ -6,14 +6,6 @@ export class GameConfig {
     // Taille de la carte (mutable pour Multi-Maps)
     static MAP_SIZE = 100;
 
-    // Dimensions de la maison
-    static readonly HOUSE = {
-        x: 15,
-        y: 15,
-        width: 6,
-        height: 6
-    };
-
     // Calibrage visuel
     static readonly ASSET_Y_OFFSET = 20;
 

@@ -70,7 +70,33 @@ export class ObjectManager {
         const manifestConfig = ASSET_MANIFEST[type];
 
         // Asset Key vient du manifest, ou type par défaut
-        const assetKey = manifestConfig?.assetKey || type;
+        let assetKey = manifestConfig?.assetKey || type;
+
+        // --- RANDOMIZATION DES ASSETS PNG ---
+        let subType = null;
+        if (type === 'tree') {
+            if (Math.random() < 0.15) {
+                assetKey = Phaser.Math.RND.pick(['appletree-1', 'appletree-2', 'appletree-3']);
+                subType = 'apple_tree';
+            } else if (Math.random() < 0.1) {
+                assetKey = Phaser.Math.RND.pick(['baretree-1', 'baretree-2']);
+            } else {
+                assetKey = Phaser.Math.RND.pick(['tree-1', 'tree-2', 'tree-3', 'tree-4']);
+            }
+        } else if (type === 'rock') {
+            assetKey = Phaser.Math.RND.pick([
+                'rock-1', 'rock-2', 'rock-3',
+                'greyrock-1', 'greyrock-2', 'greyrock-3',
+                'mossyrock-1', 'mossyrock-2', 'mossyrock-3'
+            ]);
+        } else if (type === 'cotton_bush') {
+            assetKey = 'cotton-1';
+        } else if (type === 'clay_mound' || type === 'clay_node') {
+            assetKey = Phaser.Math.RND.pick(['dirt-1', 'dirt-2']);
+        } else if (type === 'apple_tree') {
+            assetKey = Phaser.Math.RND.pick(['appletree-1', 'appletree-2', 'appletree-3']);
+            subType = 'apple_tree';
+        }
 
         // Création de l'image
         const obj = this.scene.add.image(pos.x, pos.y, assetKey);
@@ -129,8 +155,8 @@ export class ObjectManager {
 
         // LOGIC LUMIÈRE (Campfire)
         if (type === 'camp' || type === 'campfire' || assetKey === 'campfire') { // Adapt key check
-            // Teinte orangée du feu de camp si l'asset est "rock-1"
-            if (assetKey === 'rock-1') {
+            // Teinte orangée du feu de camp si l'asset est un rocher
+            if (assetKey.includes('rock')) {
                 customTint = 0xffaa00;
                 obj.setData('originalTint', customTint);
                 obj.setTint(customTint);
@@ -157,16 +183,9 @@ export class ObjectManager {
             obj.setData('light', glow);
         }
 
-        // Logique spécifique pour les arbres (Pommiers)
-        if (type === 'tree') {
-            // Utilise Math.random() ou le RNG de la scène si disponible (ici simple random pour l'effet visuel)
-            // Note: Idéalement il faudrait utiliser le RNG seedé du MapManager, mais ObjectManager est agnostique.
-            if (Math.random() < 0.2) {
-                const appleTint = 0xFFaaaa;
-                obj.setTint(appleTint); // Teinte rougeâtre
-                obj.setData('subType', 'apple_tree');
-                obj.setData('originalTint', appleTint);
-            }
+        // Assign subType if it was an apple tree
+        if (subType === 'apple_tree') {
+            obj.setData('subType', 'apple_tree');
         }
 
         this.objectMap.set(`${x},${y}`, obj);

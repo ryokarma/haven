@@ -116,9 +116,6 @@ export class MapManager {
             if (!row) continue;
 
             for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
-                // Zone protégée (Maison)
-                if (this.isInsideHouse(x, y)) continue;
-
                 // Zone de départ protégée (pas d'eau au spawn)
                 if (x < 10 && y < 10) continue;
 
@@ -153,9 +150,6 @@ export class MapManager {
             for (let x = 0; x < GameConfig.MAP_SIZE; x++) {
                 let cellType = row[x];
 
-                // Gérer l'intérieur de la maison uniquement sur la map farm_main pour l'instant
-                const isInHouse = !isHousing && this.isInsideHouse(x, y);
-
                 // Chance d'obstacle (Désactivé pour la session 4.1 : Server Authority)
                 /* if (cellType === 0 && !isInHouse && (x > 5 || y > 5)) {
                     const rnd = this.rnd.frac();
@@ -177,15 +171,8 @@ export class MapManager {
                 } */
 
                 let tileKey = '';
-                if (isInHouse) {
-                    tileKey = 'floor_wood';
-                    // Nettoyer si jamais du noise a mis de l'eau (double check)
-                    if (cellType !== 0) {
-                        cellType = 0;
-                        row[x] = 0;
-                    }
-                } else if (cellType === 2) {
-                    tileKey = 'tile_flat_0'; // Placeholder eau - l'autotiling gérera ça
+                if (cellType === 2) {
+                    tileKey = this.tileManager.getRandomWaterKey(); // Nouvelle génération PNG
                 } else {
                     tileKey = this.tileManager.getRandomTileKey();
                 }
@@ -205,18 +192,6 @@ export class MapManager {
                 } */
             }
         }
-    }
-
-    /**
-     * Vérifie si les coordonnées sont dans la maison
-     */
-    public isInsideHouse(x: number, y: number): boolean {
-        return (
-            x >= GameConfig.HOUSE.x &&
-            x < GameConfig.HOUSE.x + GameConfig.HOUSE.width &&
-            y >= GameConfig.HOUSE.y &&
-            y < GameConfig.HOUSE.y + GameConfig.HOUSE.height
-        );
     }
 
     /**
@@ -277,7 +252,7 @@ export class MapManager {
      * Vérifie si une tuile est occupée par une ressource
      */
     public isTileOccupied(x: number, y: number): boolean {
-        return this.occupiedTiles.has(`${x},${y}`) || this.isInsideHouse(x, y);
+        return this.occupiedTiles.has(`${x},${y}`);
     }
 
     /**
