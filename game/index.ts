@@ -19,7 +19,7 @@ export { PathfindingManager } from './managers/PathfindingManager';
 export { TileManager } from './managers/TileManager';
 
 // Scenes
-export { default as MainScene } from './scenes/MainScene';
+export { MainScene } from './scenes/MainScene';
 
 // UI
 export { TileSelector } from './ui/TileSelector';

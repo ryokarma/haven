@@ -327,10 +327,31 @@ export class MainScene extends Scene {
             else if (msg.type === 'PLAYER_MOVED') {
                 console.log('[Network] Mouvement d\'un autre joueur reçu:', msg);
                 this.worldStore.moveOtherPlayer(msg.id, msg.x, msg.y);
-                // Session 9.4 : Le serveur envoie désormais des coords GRILLE.
-                // On convertit en ISO pour positionner le sprite distant.
-                const remoteIso = IsoMath.gridToIso(msg.x, msg.y, this.mapOriginX, this.mapOriginY);
-                this.objectManager.moveRemotePlayer(msg.id, remoteIso.x, remoteIso.y);
+
+                const sprite = this.objectManager.remotePlayers.get(msg.id);
+                if (sprite) {
+                    // Trouver la position en grille actuelle du sprite
+                    const gridPos = IsoMath.isoToGrid(sprite.x, sprite.y - RENDER_OFFSETS['player']!.offsetY, this.mapOriginX, this.mapOriginY);
+                    const currentGridX = Math.round(gridPos.x);
+                    const currentGridY = Math.round(gridPos.y);
+
+                    // Launch Pathfinding
+                    this.pathfindingManager.findPath(currentGridX, currentGridY, msg.x, msg.y, (path) => {
+                        if (path && path.length > 0) {
+                            path.shift(); // Enlever la case de départ
+                            this.objectManager.moveRemotePlayerAlongPath(msg.id, path, this.mapOriginX, this.mapOriginY);
+                        } else {
+                            // Fallback téléportation si pas de chemin ou cible bloquée / inatteignable
+                            const targetIso = IsoMath.gridToIso(msg.x, msg.y, this.mapOriginX, this.mapOriginY);
+                            // Set raw position
+                            sprite.setPosition(targetIso.x, targetIso.y + RENDER_OFFSETS['player']!.offsetY);
+                            sprite.setDepth(targetIso.y + RENDER_OFFSETS['player']!.offsetY + (targetIso.x * 0.001));
+
+                            const nameText = sprite.getData('nameText');
+                            if (nameText) nameText.setPosition(sprite.x, sprite.y - 60);
+                        }
+                    });
+                }
             }
             else if (msg.type === 'WORLD_STATE' || msg.type === 'MAP_STATE') {
                 if (msg.payload && msg.payload.resources && Array.isArray(msg.payload.resources)) {

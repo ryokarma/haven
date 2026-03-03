@@ -440,30 +440,35 @@ export class ObjectManager {
     }
 
     /**
-     * Déplace un joueur distant (Interpolation simple)
+     * Déplace un joueur distant le long d'un chemin (Pathfinding Local)
      */
-    moveRemotePlayer(id: string, targetX: number, targetY: number): void {
+    moveRemotePlayerAlongPath(id: string, path: { x: number, y: number }[], mapOriginX: number, mapOriginY: number): void {
         const sprite = this.remotePlayers.get(id);
-        if (sprite) {
-            const actualY = targetY + RENDER_OFFSETS['player']!.offsetY;
-            // Distance pour calculer la durée (vitesse constante)
-            const dist = Phaser.Math.Distance.Between(sprite.x, sprite.y, targetX, actualY);
-            // On s'assure que duration n'est pas 0 ou négatif
-            const duration = Math.max(50, (dist / 32) * 250); // Basé sur ~250ms par tuile (32px approx)
+        if (!sprite || path.length === 0) return;
+
+        // Si un tween est déjà en cours, on le stoppe (on recalculera depuis la nouvelle pos)
+        this.scene.tweens.killTweensOf(sprite);
+
+        const moveNextInterval = () => {
+            if (path.length === 0) return;
+
+            const nextGridPos = path.shift()!;
+            const targetIso = IsoMath.gridToIso(nextGridPos.x, nextGridPos.y, mapOriginX, mapOriginY);
+            const actualY = targetIso.y + RENDER_OFFSETS['player']!.offsetY;
 
             // Flip selon la direction X isométrique
-            if (targetX < sprite.x) {
+            if (targetIso.x < sprite.x) {
                 sprite.setFlipX(true);
-            } else if (targetX > sprite.x) {
+            } else if (targetIso.x > sprite.x) {
                 sprite.setFlipX(false);
             }
 
             const nameText = sprite.getData('nameText') as Phaser.GameObjects.Text | undefined;
+            const duration = GameConfig.MOVEMENT.stepDuration; // Maintient la même vitesse que le local
 
-            // Tween vers la nouvelle position
             this.scene.tweens.add({
                 targets: sprite,
-                x: targetX,
+                x: targetIso.x,
                 y: actualY,
                 duration: duration,
                 ease: 'Linear',
@@ -473,11 +478,14 @@ export class ObjectManager {
                     if (nameText) {
                         nameText.setPosition(sprite.x, sprite.y - 60);
                     }
+                },
+                onComplete: () => {
+                    moveNextInterval(); // Continue au prochain pas
                 }
             });
+        };
 
-            // TODO: Jouer animation de marche si disponible
-        }
+        moveNextInterval();
     }
     /**
      * Affiche un texte flottant (ex: +1 Wood)

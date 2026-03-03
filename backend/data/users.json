@@ -184,12 +184,33 @@
     },
     "a5b84c38-b0e8-4933-8434-74e2d18923ac": {
         "id": "a5b84c38-b0e8-4933-8434-74e2d18923ac",
-        "x": 17,
+        "x": 16,
         "y": 17,
         "wallet": {
             "wood": 1,
             "stone": 0,
             "apple": 12
+        },
+        "map_id": "farm_main"
+    },
+    "cb372e8b-e786-40fd-a55d-f464fedf9c6c": {
+        "id": "cb372e8b-e786-40fd-a55d-f464fedf9c6c",
+        "x": 6,
+        "y": 7,
+        "wallet": {
+            "wood": 0,
+            "stone": 0,
+            "cotton_plant": 1
+        },
+        "map_id": "farm_main"
+    },
+    "faad0eb8-01ac-40e7-a26d-908e827e23bb": {
+        "id": "faad0eb8-01ac-40e7-a26d-908e827e23bb",
+        "x": 18,
+        "y": 18,
+        "wallet": {
+            "wood": 0,
+            "stone": 0
         },
         "map_id": "farm_main"
     }
