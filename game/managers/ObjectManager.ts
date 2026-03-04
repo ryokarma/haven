@@ -399,7 +399,7 @@ export class ObjectManager {
         if (this.remotePlayers.has(id)) return;
 
         // Use 'hero' texture which we know exists
-        const actualY = y + RENDER_OFFSETS['player']!.offsetY;
+        const actualY = y + RENDER_OFFSETS['player']!.offsetY + GameConfig.PLAYER_VISUAL_OFFSET_Y;
         const playerSprite = this.scene.add.sprite(x, actualY, 'hero');
         playerSprite.setTint(0xffa500); // Orange tint to distinguish clearly
         playerSprite.setOrigin(RENDER_OFFSETS['player']!.originX, RENDER_OFFSETS['player']!.originY);
@@ -454,7 +454,7 @@ export class ObjectManager {
 
             const nextGridPos = path.shift()!;
             const targetIso = IsoMath.gridToIso(nextGridPos.x, nextGridPos.y, mapOriginX, mapOriginY);
-            const actualY = targetIso.y + RENDER_OFFSETS['player']!.offsetY;
+            const actualY = targetIso.y + RENDER_OFFSETS['player']!.offsetY + GameConfig.PLAYER_VISUAL_OFFSET_Y;
 
             // Flip selon la direction X isométrique
             if (targetIso.x < sprite.x) {

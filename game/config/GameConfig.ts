@@ -9,6 +9,10 @@ export class GameConfig {
     // Calibrage visuel
     static readonly ASSET_Y_OFFSET = 20;
 
+    // Ajustement visuel spécifique au sprite du joueur (pixels vides sous les pieds)
+    // Permet d'ancrer visuellement le sprite sur la grille sans modifier ses coordonnées logiques
+    static readonly PLAYER_VISUAL_OFFSET_Y = 0;
+
     // Paramètres de génération de la carte
     static readonly MAP_GENERATION = {
         obstacleChance: 0.15,

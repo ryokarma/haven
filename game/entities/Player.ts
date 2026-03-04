@@ -25,7 +25,7 @@ export class Player {
 
         const config = RENDER_OFFSETS['player']!;
         this.sprite.setOrigin(config.originX, config.originY);
-        this.sprite.y = pos.y + config.offsetY; // Apply offset
+        this.sprite.y = pos.y + config.offsetY + GameConfig.PLAYER_VISUAL_OFFSET_Y; // Apply offset
 
         // Profondeur dynamique
         // On aligne avec la logique des objets : sprite.y + offset X
@@ -86,7 +86,9 @@ export class Player {
         this.sprite.y = y;
 
         // Update Grid Coords
-        const gridPos = IsoMath.isoToGrid(x, y - RENDER_OFFSETS['player']!.offsetY, originX, originY);
+        // Need to compensate the visual offset to correctly reconstruct grid pos
+        const visualOffsetY = RENDER_OFFSETS['player']!.offsetY + GameConfig.PLAYER_VISUAL_OFFSET_Y;
+        const gridPos = IsoMath.isoToGrid(x, y - visualOffsetY, originX, originY);
         this.gridX = Math.round(gridPos.x); // Snap to nearest grid?
         this.gridY = Math.round(gridPos.y);
 
@@ -145,12 +147,14 @@ export class Player {
         this.gridY = targetY;
 
         const targetIso = IsoMath.gridToIso(targetX, targetY, originX, originY);
+        const config = RENDER_OFFSETS['player']!;
+        const targetYWithOffset = targetIso.y + config.offsetY + GameConfig.PLAYER_VISUAL_OFFSET_Y;
         const moveDuration = duration || GameConfig.MOVEMENT.stepDuration;
 
         this.scene.tweens.add({
             targets: this.sprite,
             x: targetIso.x,
-            y: targetIso.y,
+            y: targetYWithOffset,
             duration: moveDuration,
             ease: 'Linear',
             onUpdate: () => {
@@ -164,11 +168,12 @@ export class Player {
                 }
 
                 // Sync Debug Dot (Doit rester au "sol" théorique)
-                // Attention: this.sprite.y contient l'offsetY. 
-                // Si on veut afficher le pivot, il faut soustraire l'offset.
+                // Attention: this.sprite.y contient l'offsetY et PLAYER_VISUAL_OFFSET_Y. 
+                // Si on veut afficher le pivot, il faut soustraire l'offset total.
                 if (this.debugDot) {
                     const config = RENDER_OFFSETS['player']!;
-                    this.debugDot.setPosition(this.sprite.x, this.sprite.y - config.offsetY);
+                    const totalOffset = config.offsetY + GameConfig.PLAYER_VISUAL_OFFSET_Y;
+                    this.debugDot.setPosition(this.sprite.x, this.sprite.y - totalOffset);
                     this.debugDot.setDepth(999999);
                 }
             },

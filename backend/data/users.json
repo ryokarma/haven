@@ -195,8 +195,8 @@
     },
     "cb372e8b-e786-40fd-a55d-f464fedf9c6c": {
         "id": "cb372e8b-e786-40fd-a55d-f464fedf9c6c",
-        "x": 6,
-        "y": 7,
+        "x": 12,
+        "y": 4,
         "wallet": {
             "wood": 0,
             "stone": 0,
@@ -208,6 +208,16 @@
         "id": "faad0eb8-01ac-40e7-a26d-908e827e23bb",
         "x": 18,
         "y": 18,
+        "wallet": {
+            "wood": 0,
+            "stone": 0
+        },
+        "map_id": "farm_main"
+    },
+    "4542e128-22ab-489b-bad4-0953e570518d": {
+        "id": "4542e128-22ab-489b-bad4-0953e570518d",
+        "x": 9,
+        "y": 7,
         "wallet": {
             "wood": 0,
             "stone": 0
