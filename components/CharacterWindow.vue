@@ -27,8 +27,8 @@ const handleUnequip = (slot: 'head' | 'body' | 'mainHand' | 'accessory') => {
 </script>
 
 <template>
-  <div class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50">
-    <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20">
+  <div class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50" @click.self="$emit('close')" @mousedown.self.stop @touchstart.self.stop>
+    <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20" @click.stop @mousedown.stop @touchstart.stop>
         
         <div class="mb-6 flex items-center justify-between border-b border-white/10 pb-4">
             <h2 class="text-xl font-bold text-amber-100 flex items-center gap-2">

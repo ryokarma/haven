@@ -79,13 +79,13 @@ export const useNetworkStore = defineStore('network', () => {
         }
     }
 
-    function connect(playerId: string) {
+    function connect(playerId: string, token: string) {
         if (socket.value) {
             console.warn('[Network] Déjà connecté ou connexion en cours.');
             return;
         }
 
-        const url = `ws://localhost:8000/ws/${playerId}`;
+        const url = `ws://localhost:8000/ws/${playerId}?token=${token}`;
         console.log(`[Network] Connexion à ${url}...`);
 
         try {
@@ -107,7 +107,7 @@ export const useNetworkStore = defineStore('network', () => {
                 cleanup();
                 setTimeout(() => {
                     console.log('[Network] Tentative de reconnexion...');
-                    connect(playerId);
+                    connect(playerId, token);
                 }, 3000);
             };
 

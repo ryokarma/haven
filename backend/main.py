@@ -15,6 +15,12 @@ from backend.usermanager import UserManager
 from backend import recipes
 from backend.database import get_db, engine, Base
 import backend.models
+from backend.auth import get_password_hash, verify_password, create_access_token, decode_access_token
+
+from fastapi import Query, HTTPException, status
+import uuid
+from sqlalchemy.future import select
+from sqlalchemy import text
 
 # ──────────────────────────────────────────────
 # 1. Application & CORS
@@ -25,7 +31,20 @@ app = FastAPI(title="Haven Backend", version="0.1.0")
 async def startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("[DB] Tables SQLite créées ou vérifiées.")
+        # Migration SQLite basique pour ajouter les colonnes sans Alembic (si elles n'existent pas)
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN password_hash VARCHAR"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN role VARCHAR DEFAULT 'user'"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
+        except Exception:
+            pass
+    print("[DB] Tables SQLite créées ou vérifiées et colonnes migrées.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -129,13 +148,52 @@ def determine_harvest_resource(asset: str) -> str:
 
 
 # ──────────────────────────────────────────────
-# 5. WebSocket Endpoint
+# 5. API REST — Authentification
+# ──────────────────────────────────────────────
+
+@app.post("/register")
+async def register(req: backend.models.RegisterRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(backend.models.User).where(backend.models.User.username == req.username))
+    existing_user = result.scalars().first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Ce nom d'utilisateur est déjà pris")
+    
+    new_user = backend.models.User(
+        id=str(uuid.uuid4()),
+        username=req.username,
+        password_hash=get_password_hash(req.password),
+        role="user"
+    )
+    db.add(new_user)
+    await db.commit()
+    return {"message": "Compte créé avec succès"}
+
+@app.post("/login")
+async def login(req: backend.models.LoginRequest, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(backend.models.User).where(backend.models.User.username == req.username))
+    user = result.scalars().first()
+    
+    if not user or not user.password_hash or not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Identifiants incorrects")
+    
+    token = create_access_token({"sub": user.id, "username": user.username})
+    return {"access_token": token, "token_type": "bearer", "player_id": user.id, "username": user.username}
+
+# ──────────────────────────────────────────────
+# 6. WebSocket Endpoint
 # ──────────────────────────────────────────────
 
 @app.websocket("/ws/{client_id}")
-# [WIP] DB Injection (Session 13.0)
-# async def websocket_endpoint(websocket: WebSocket, client_id: str, db: AsyncSession = Depends(get_db)):
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
+async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = Query(None)):
+    if not token:
+        await websocket.close(code=1008, reason="Token manquant (accès refusé)")
+        return
+    
+    payload = decode_access_token(token)
+    if not payload or payload.get("sub") != client_id:
+        await websocket.close(code=1008, reason="Token invalide ou ne correspond pas au client_id")
+        return
+        
     await manager.connect(websocket, client_id)
 
     # ── A. Synchro Joueur ──

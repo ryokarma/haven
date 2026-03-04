@@ -18,7 +18,7 @@ const sendMessage = () => {
 
 const onFocus = () => {
     isFocused.value = true;
-    playerStore.setPlacementMode(false); // Disable game actions/camera movement? 
+    playerStore.setPlacementMode(false); // Désactive les actions de jeu
 };
 
 const onBlur = () => {
@@ -36,6 +36,8 @@ watch(() => chatStore.messages.length, () => {
 
 // Global shortcut to focus chat
 const handleGlobalKeydown = (e: KeyboardEvent) => {
+    // Si la touche Entrée est pressée et qu'on n'est pas déjà dans l'input, on le focus
+    // Pas besoin d'empêcher le comportement par défaut de l'Entrée ici sauf si Phaser l'utilise
     if (e.key === 'Enter' && !isFocused.value) {
         e.preventDefault();
         inputRef.value?.focus();
@@ -53,38 +55,48 @@ const formatTime = (ts: number | undefined) => {
 </script>
 
 <template>
-  <div class="pointer-events-auto absolute bottom-4 left-4 z-50 flex flex-col gap-2 w-80 max-h-[400px]">
+  <div class="pointer-events-auto absolute bottom-32 left-4 z-40 flex flex-col gap-2 w-80 max-h-[400px]" @click.stop @mousedown.stop @touchstart.stop>
     <!-- Messages List -->
     <div 
         ref="messagesContainer"
-        class="flex flex-col gap-1 overflow-y-auto max-h-64 p-2 rounded-lg bg-black/40 backdrop-blur-sm transition-all hover:bg-black/60 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent"
+        class="flex flex-col gap-1 overflow-y-auto max-h-64 p-3 rounded-lg bg-stone-900/40 backdrop-blur-sm transition-all hover:bg-stone-900/60 border border-stone-100/10 shadow-lg no-scrollbar"
         :class="{ 'opacity-60 hover:opacity-100': !isFocused, 'opacity-100': isFocused }"
     >
-        <div v-for="(msg, idx) in chatStore.messages" :key="idx" class="text-xs shadow-black drop-shadow-md break-words animate-slide-in">
-            <span class="text-slate-400 font-mono text-[10px] mr-1">[{{ formatTime(msg.timestamp) }}]</span>
-            <span class="font-bold text-amber-400" :title="msg.sender">{{ msg.sender.slice(0, 5) }}:</span>
-            <span class="text-white ml-1">{{ msg.text }}</span>
+        <div v-for="(msg, idx) in chatStore.messages" :key="idx" class="text-sm shadow-black drop-shadow-md break-words animate-slide-in leading-tight">
+            <span class="text-stone-400 font-mono text-[10px] mr-1 align-baseline">[{{ formatTime(msg.timestamp) }}]</span>
+            <span class="font-bold text-amber-300 align-baseline" :title="msg.sender">{{ msg.sender.slice(0, 5) }}</span>
+            <span class="text-stone-400 mx-1 align-baseline">:</span>
+            <span class="text-stone-100 align-baseline font-medium">{{ msg.text }}</span>
         </div>
     </div>
 
     <!-- Input -->
+    <!-- On stop la propagation du clavier pour ne pas déclencher les raccourcis Phaser -->
     <input 
         ref="inputRef"
         v-model="inputMessage"
         @keydown.enter="sendMessage"
         @focus="onFocus"
         @blur="onBlur"
-        @keydown.stop 
+        @keydown.stop
+        @keyup.stop
+        @keypress.stop
         type="text" 
-        placeholder="Entrée pour discuter..."
-        class="w-full bg-black/60 text-white border border-white/20 rounded px-3 py-2 text-xs outline-none focus:border-amber-400 backdrop-blur-md transition-colors focus:bg-black/80 placeholder-white/30"
+        placeholder="Appuyez sur Entrée pour discuter..."
+        class="w-full bg-stone-900/50 text-stone-100 border border-stone-100/10 rounded px-3 py-2 text-sm outline-none focus:border-amber-400/50 backdrop-blur-md transition-all focus:bg-stone-900/80 placeholder-stone-400/60 shadow-lg"
     />
   </div>
 </template>
 
 <style scoped>
-.scrollbar-thin::-webkit-scrollbar { width: 4px; }
-.scrollbar-thin::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+/* Scrollbar invisible */
+.no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
+}
 .animate-slide-in { animation: slideIn 0.2s ease-out; }
 @keyframes slideIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 </style>

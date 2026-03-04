@@ -63,10 +63,10 @@ watch(() => player.lastActionFeedback, (newVal) => {
 </script>
 
 <template>
-  <div class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6 z-50">
+  <div class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6">
     
     <!-- BOUTON RESET (Debug) -->
-    <div class="pointer-events-auto absolute top-4 right-4 z-[100] flex flex-col gap-2">
+    <div class="pointer-events-auto absolute top-4 right-4 z-[100] flex flex-col gap-2" @click.stop @mousedown.stop @touchstart.stop>
         <button 
             @click="resetSave"
             class="flex items-center gap-2 bg-red-600/20 hover:bg-red-600/80 border border-red-500/50 text-red-200 hover:text-white text-[10px] font-bold px-3 py-1.5 rounded uppercase tracking-wider backdrop-blur-sm shadow-lg transition-all active:scale-95"
@@ -78,7 +78,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
     </div>
 
     
-    <div class="pointer-events-auto flex items-center gap-4 animate-fade-in">
+    <div class="pointer-events-auto flex items-center gap-4 animate-fade-in z-10 w-fit" @click.stop @mousedown.stop @touchstart.stop>
         <div class="relative group flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/20 bg-slate-900/60 backdrop-blur-md shadow-lg transition-transform hover:scale-105">
             <img src="/assets/hero.png" class="h-12 w-12 object-contain" alt="Avatar" />
             <div class="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-slate-900 border border-white/20 shadow-sm">
@@ -146,7 +146,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
 
 
     <!-- WALLET DISPLAY (Coin supérieur gauche) -->
-    <div class="pointer-events-auto absolute top-4 left-4 z-40 flex flex-col gap-2">
+    <div class="pointer-events-auto absolute top-4 left-4 z-10 flex flex-col gap-2" @click.stop @mousedown.stop @touchstart.stop>
         <div class="flex items-center gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-3 py-1.5 rounded-lg shadow-lg">
             <span v-html="icons.wood" class="text-amber-600 scale-75"></span>
             <span class="font-mono font-bold text-amber-100">{{ player.economyInventory.wood || 0 }}</span>
@@ -157,8 +157,8 @@ watch(() => player.lastActionFeedback, (newVal) => {
         </div>
     </div>
 
-    <div v-if="isInventoryOpen" class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all">
-      <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20">
+    <div v-if="isInventoryOpen" class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all z-50" @click.self="isInventoryOpen = false" @mousedown.self.stop @touchstart.self.stop>
+      <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20 pointer-events-auto" @click.stop @mousedown.stop @touchstart.stop>
         
         <div class="mb-6 flex items-center justify-between border-b border-white/10 pb-4">
             <h2 class="flex items-center gap-2 text-xl font-bold text-amber-100">
@@ -208,7 +208,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
         @close="isCharacterOpen = false" 
     />
 
-    <div class="absolute bottom-4 right-4 pointer-events-auto flex items-center gap-3">
+    <div class="absolute bottom-4 right-4 pointer-events-auto flex items-center gap-3 z-10" @click.stop @mousedown.stop @touchstart.stop>
           <!-- Bouton Crafting -->
           <button 
             @click="isCraftingOpen = !isCraftingOpen" 

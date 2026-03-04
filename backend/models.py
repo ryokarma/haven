@@ -44,18 +44,32 @@ class WorldObject(BaseModel):
     y: int
 
 
+# ─────────────────── Authentification ───────────────────
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 # ─────────────────── Sessions (Legacy, conservé) ───────────────────
 
 # ─────────────────── Modèles SQLAlchemy (PostgreSQL) ───────────────────
 
-from sqlalchemy import Column, String, Float, Integer, JSON
+from sqlalchemy import Column, String, Float, Integer, JSON, DateTime
+from datetime import datetime
 from backend.database import Base
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(String, primary_key=True, index=True) # ID unique du joueur (ex: token auth)
-    username = Column(String, nullable=True)          # Pseudo
+    username = Column(String, unique=True, index=True, nullable=True)          # Pseudo
+    password_hash = Column(String, nullable=True)     # Hachage du mot de passe
+    role = Column(String, default="user")             # Rôle utilisateur
+    created_at = Column(DateTime, default=datetime.utcnow) # Date de création
     position_x = Column(Float, default=10.0)          # X grille isométrique
     position_y = Column(Float, default=10.0)          # Y grille isométrique
     map_id = Column(String, default="main")           # Carte courante (ex: surface, cave)

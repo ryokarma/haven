@@ -4,7 +4,6 @@ import { useNetworkStore } from '@/stores/network';
 import { useWorldStore } from '@/stores/world';
 import { getItemData, type ToolType } from '@/game/config/ItemRegistry';
 import { useChatStore } from '@/stores/chat';
-import { useBuildStore } from '@/stores/build';
 import { IsoMath } from '@/game/utils/IsoMath';
 import { GameConfig } from '@/game/config/GameConfig';
 import { PathfindingManager } from '@/game/managers/PathfindingManager';
@@ -21,7 +20,6 @@ export class MainScene extends Scene {
     // Stores
     private playerStore!: ReturnType<typeof usePlayerStore>;
     private worldStore!: ReturnType<typeof useWorldStore>;
-    private buildStore!: ReturnType<typeof useBuildStore>;
 
     // Config
     private mapOriginX!: number;
@@ -105,7 +103,6 @@ export class MainScene extends Scene {
     create() {
         this.playerStore = usePlayerStore();
         this.worldStore = useWorldStore();
-        this.buildStore = useBuildStore();
 
         this.currentMapId = "farm_main";
 
@@ -278,10 +275,10 @@ export class MainScene extends Scene {
         // --- MULTIJOUEUR ---
         const networkStore = useNetworkStore();
 
-        // [16.3] Nuclear: Purger TOUS les anciens listeners pour éviter les doublons après scene.restart()
         networkStore.clearMessages();
 
         networkStore.listenForEconomy(); // Start listening for economy and craft success
+        networkStore.listenForChatMessages(); // Start listening for incoming chat messages
         networkStore.listenForErrors(); // Start listening for server errors
 
         // Abonnement aux messages
@@ -562,19 +559,8 @@ export class MainScene extends Scene {
             const { x, y } = event;
             const networkStore = useNetworkStore();
 
-            if (this.buildStore.selectedItemId === 'cursor') {
-                // Mode curseur : On récolte / interagit (Suppression server-side)
-                networkStore.sendInteract(x, y);
-            } else {
-                // Mode construction : On construit
-                // On vérifie d'abord si la case est libre localement (Feedback immédiat)
-                if (this.mapManager.isTileOccupied(x, y)) {
-                    // Feedback visuel déjà géré par le Ghost (Rouge)
-                    // On peut ajouter un son ou un message d'erreur ici si nécessaire
-                    return;
-                }
-                networkStore.sendBuild(x, y, this.buildStore.selectedItemId);
-            }
+            // Interaction par défaut
+            networkStore.sendInteract(x, y);
         });
 
         // Clic sur une ressource du serveur (via gameobjectup dans InputManager)
@@ -1104,12 +1090,17 @@ export class MainScene extends Scene {
      * Met à jour le fantôme de placement
      */
     private updatePlacementGhost() {
-        if (!this.buildStore) return;
+        if (!this.playerStore) return;
 
-        const selectedId = this.buildStore.selectedItemId;
+        const placementMode = this.playerStore.placementMode;
+        let selectedId = this.playerStore.placingItemName;
 
-        // Si curseur ou rien, on cache
-        if (selectedId === 'cursor' || !selectedId) {
+        // Mapping simple name -> sprite texture si nécessaire
+        if (selectedId === 'Bois') selectedId = 'tree';
+        if (selectedId === 'Pierre') selectedId = 'rock';
+
+        // Si pas de placement, on cache
+        if (!placementMode || !selectedId) {
             if (this.placementGhost) {
                 this.placementGhost.setVisible(false);
             }

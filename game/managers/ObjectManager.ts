@@ -533,85 +533,109 @@ export class ObjectManager {
 
     }
 
-    /**
-     * Méthode interne pour créer la bulle sur une cible
-     */
     createChatBubbleOnSprite(sprite: Phaser.GameObjects.Sprite | Phaser.GameObjects.Container | Phaser.GameObjects.Image, message: string): void {
-        // Nettoyage ancienne bulle si existe
-        const oldBubble = sprite.getData('chatBubble');
-        if (oldBubble) {
-            oldBubble.destroy();
+        // 1. Initialiser ou récupérer la file d'attente des bulles pour ce sprite
+        let bubbles: Phaser.GameObjects.Text[] = sprite.getData('chatBubbles');
+        if (!bubbles) {
+            bubbles = [];
+            sprite.setData('chatBubbles', bubbles);
         }
 
-        const container = this.scene.add.container(sprite.x, sprite.y - 60);
-        container.setDepth(999999);
+        // Nettoyage des références détruites
+        bubbles = bubbles.filter(b => b.active);
 
-        // Texte pour mesurer
-        const text = this.scene.add.text(0, 0, message, {
+        // 2. Calcul du décalage (Y)
+        // Le pseudo est affiché à y - 60. On veut être au-dessus du pseudo sans jamais le cacher.
+        // On commence donc à y - 80 (ou plus selon la taille de la bulle, mais l'ancrage Bottom aide beaucoup).
+        const NAME_OFFSET = -80;
+        const PUSH_UP_DISTANCE = 20; // Distance dont les anciennes bulles montent quand une nouvelle arrive
+
+        // On commande aux anciennes bulles de monter
+        bubbles.forEach(b => {
+            const currentTarget = b.getData('yTargetOffset') as number;
+            // On accumule la cible si l'utilisateur envoie très vite plusieurs messages
+            b.setData('yTargetOffset', currentTarget - PUSH_UP_DISTANCE);
+        });
+
+        // 3. Création du composant Text
+        const text = this.scene.add.text(sprite.x, sprite.y + NAME_OFFSET, message, {
             fontFamily: 'Arial',
             fontSize: '14px',
-            color: '#000000',
+            fontStyle: 'bold',
+            color: '#ffffff',
+            stroke: '#000000',
+            strokeThickness: 3,
             align: 'center',
-            wordWrap: { width: 150 }
+            wordWrap: { width: 250 }
         });
-        text.setOrigin(0.5, 0.5);
 
-        const w = text.width + 20;
-        const h = text.height + 14;
+        // Origin en bas au centre pour empiler de bas en haut proprement, peu importe le nb de lignes
+        text.setOrigin(0.5, 1);
+        text.setDepth(999999);
 
-        // Fond (Graphique)
-        const bg = this.scene.add.graphics();
-        bg.fillStyle(0xffffff, 1);
-        bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
-        // Petite flèche bas
-        bg.fillTriangle(-5, h / 2, 5, h / 2, 0, h / 2 + 5);
+        // Données privées de positionnement
+        text.setData('yOffset', NAME_OFFSET);           // Position de base instantanée
+        text.setData('yTargetOffset', NAME_OFFSET);     // Destination (pour l'effet de push up fluide)
+        text.setData('driftOffset', 0);                 // Dérive due à la flottaison
 
-        container.add([bg, text]);
+        bubbles.push(text);
+        sprite.setData('chatBubbles', bubbles);
 
-        // Sauvegarde référence
-        sprite.setData('chatBubble', container);
+        // 4. Tweens
 
-        // Animation Pop In
-        container.setScale(0);
+        // A) Tween de Flottaison (Drift ascendant continu sur 4 secondes)
+        const driftTarget = { value: 0 };
         this.scene.tweens.add({
-            targets: container,
-            scale: { from: 0, to: 1 },
-            duration: 200,
-            ease: 'Back.out'
-        });
-
-        // Auto destroy
-        this.scene.time.delayedCall(4000, () => {
-            this.scene.tweens.add({
-                targets: container,
-                alpha: 0,
-                duration: 500,
-                onComplete: () => {
-                    container.destroy();
-                    sprite.setData('chatBubble', null); // Clean ref
+            targets: driftTarget,
+            value: -50,
+            duration: 4000,
+            ease: 'Linear',
+            onUpdate: () => {
+                if (text.active) {
+                    text.setData('driftOffset', driftTarget.value);
                 }
-            });
+            }
         });
 
-        // Update position in update loop? 
-        // Si le sprite bouge, le container ne suit pas automatiquement.
-        // On attache un update listener ou on le met enfant du sprite ?
-        // Si enfant du sprite, scale du sprite impacte bulle. Mieux vaut update position.
-        // Pour ce MVP, bulle statique à l'endroit du message ou simple tracking via scene update ?
-        // On va laisser statique pour l'instant (message "lâché" dans le monde) ou simple parenting si possible?
-        // NON : Parenting Phaser Container -> Sprite n'est pas standard.
-        // On laisse comme ça, si le joueur bouge la bulle reste là un peu comme dans certains RPGs, ou on ajoute un simple update.
-        // On va ajouter un update callback à la scene.
+        // B) Tween de Fade Out (Alpha de 1 vers 0 sur 4 secondes)
+        this.scene.tweens.add({
+            targets: text,
+            alpha: { from: 1, to: 0 },
+            duration: 4000,
+            ease: 'Sine.easeIn', // Disparition qui s'accélère à la fin
+            onComplete: () => {
+                // Destruction propre
+                const idx = bubbles.indexOf(text);
+                if (idx !== -1) bubbles.splice(idx, 1);
+                text.destroy();
+            }
+        });
+
+        // 5. Update Listener (Suit le mouvement du sprite ET gère le lissage du décalage)
         const updateListener = () => {
-            if (!container.active) {
+            if (!text.active || !sprite.active) {
                 this.scene.events.off('update', updateListener);
+                if (text.active) text.destroy();
                 return;
             }
-            if (sprite.active) {
-                container.setPosition(sprite.x, sprite.y - 60);
-                container.setDepth(sprite.y + 1000); // Toujours devant
+
+            // Lerp manuel pour "pousser" la bulle de manière fluide quand un nouveau message arrive
+            let current = text.getData('yOffset') as number;
+            const target = text.getData('yTargetOffset') as number;
+
+            if (current !== target) {
+                current += (target - current) * 0.15; // Facteur de lissage (rapide mais doux)
+                if (Math.abs(target - current) < 0.5) current = target;
+                text.setData('yOffset', current);
             }
+
+            const drift = text.getData('driftOffset') as number;
+
+            // Appliquer la position dynamique absolue
+            text.setPosition(sprite.x, sprite.y + current + drift);
+            text.setDepth(sprite.y + 1000); // Toujours le plus haut possible, trié par Y du sprite
         };
+
         this.scene.events.on('update', updateListener);
     }
 }

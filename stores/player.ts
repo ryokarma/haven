@@ -48,6 +48,8 @@ export interface PlayerState {
         mainHand: InventoryItem | null;
         accessory: InventoryItem | null;
     };
+    hotbar: (string | null)[];
+    activeItemSlot: number | null;
 }
 
 export const usePlayerStore = defineStore('player', {
@@ -149,7 +151,19 @@ export const usePlayerStore = defineStore('player', {
             body: null,
             mainHand: null,
             accessory: null
-        }
+        },
+        hotbar: [
+            'Hache en pierre',
+            'tool_pickaxe',
+            'tool_shovel',
+            'tool_knife',
+            'Bois',
+            'Pierre',
+            'furnace',
+            'clay_pot',
+            'cotton_seeds'
+        ],
+        activeItemSlot: null
     }),
     getters: {
         statsModifiers(state): { harvestCost: number } {
@@ -174,8 +188,34 @@ export const usePlayerStore = defineStore('player', {
             if (active && itemName) {
                 this.lastActionFeedback = `Mode placement : ${itemName}#${Date.now()}`;
             }
-            if (active && itemName) {
-                this.lastActionFeedback = `Mode placement : ${itemName}#${Date.now()}`;
+        },
+
+        setActiveItemSlot(index: number) {
+            if (this.activeItemSlot === index) {
+                this.activeItemSlot = null;
+                this.equipment.mainHand = null;
+                this.setPlacementMode(false);
+                return;
+            }
+
+            this.activeItemSlot = index;
+            const itemName = this.hotbar[index];
+
+            if (!itemName) {
+                this.equipment.mainHand = null;
+                this.setPlacementMode(false);
+                return;
+            }
+
+            const info = this.getItemInfo(itemName);
+            if (info.type === 'tool' || info.slotType === 'mainHand') {
+                // Faux equipement (sans retirer de l'inventaire) pour compatibilité Phaser
+                this.equipment.mainHand = { name: itemName, count: 1 };
+                this.setPlacementMode(false);
+                this.lastActionFeedback = `Équipé : ${itemName}#${Date.now()}`;
+            } else {
+                this.equipment.mainHand = null;
+                this.setPlacementMode(true, itemName);
             }
         },
         updateEconomyInventory(newInventory: Record<string, number>) {
