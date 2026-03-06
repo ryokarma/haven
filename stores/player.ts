@@ -18,6 +18,7 @@ export interface Recipe {
 
 export interface PlayerState {
     username: string;
+    role: string;
     color: number;
     position: { x: number; y: number };
     level: number;
@@ -55,6 +56,7 @@ export interface PlayerState {
 export const usePlayerStore = defineStore('player', {
     state: (): PlayerState => ({
         username: 'Voyageur',
+        role: 'user',
         color: 0xe11d48, // Rose/Rouge par défaut
         position: { x: 0, y: 0 },
         level: 1,
@@ -178,6 +180,9 @@ export const usePlayerStore = defineStore('player', {
         }
     },
     actions: {
+        setRole(role: string) {
+            this.role = role;
+        },
         getItemInfo(itemName: string) {
             return getItemData(itemName) || { slotType: null, type: 'other' };
         },

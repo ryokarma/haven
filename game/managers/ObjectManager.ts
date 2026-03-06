@@ -583,12 +583,12 @@ export class ObjectManager {
 
         // 4. Tweens
 
-        // A) Tween de Flottaison (Drift ascendant continu sur 4 secondes)
+        // A) Tween de Flottaison (Drift ascendant continu sur 6 secondes)
         const driftTarget = { value: 0 };
         this.scene.tweens.add({
             targets: driftTarget,
-            value: -50,
-            duration: 4000,
+            value: -250,
+            duration: 6000,
             ease: 'Linear',
             onUpdate: () => {
                 if (text.active) {
@@ -597,11 +597,11 @@ export class ObjectManager {
             }
         });
 
-        // B) Tween de Fade Out (Alpha de 1 vers 0 sur 4 secondes)
+        // B) Tween de Fade Out (Alpha de 1 vers 0 sur 6 secondes)
         this.scene.tweens.add({
             targets: text,
             alpha: { from: 1, to: 0 },
-            duration: 4000,
+            duration: 6000,
             ease: 'Sine.easeIn', // Disparition qui s'accélère à la fin
             onComplete: () => {
                 // Destruction propre

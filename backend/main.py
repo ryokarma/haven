@@ -176,8 +176,8 @@ async def login(req: backend.models.LoginRequest, db: AsyncSession = Depends(get
     if not user or not user.password_hash or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Identifiants incorrects")
     
-    token = create_access_token({"sub": user.id, "username": user.username})
-    return {"access_token": token, "token_type": "bearer", "player_id": user.id, "username": user.username}
+    token = create_access_token({"sub": user.id, "username": user.username, "role": user.role})
+    return {"access_token": token, "token_type": "bearer", "player_id": user.id, "username": user.username, "role": user.role}
 
 # ──────────────────────────────────────────────
 # 6. WebSocket Endpoint
@@ -189,8 +189,8 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         await websocket.close(code=1008, reason="Token manquant (accès refusé)")
         return
     
-    payload = decode_access_token(token)
-    if not payload or payload.get("sub") != client_id:
+    payload_token = decode_access_token(token)
+    if not payload_token or payload_token.get("sub") != client_id:
         await websocket.close(code=1008, reason="Token invalide ou ne correspond pas au client_id")
         return
         
@@ -496,6 +496,43 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
             elif msg_type == "ACTION_CHANGE_MAP":
                 # [16.4] Rollback: Map transition disabled
                 await websocket.send_text(make_msg("ERROR", message="Le voyage inter-cartes est temporairement désactivé."))
+
+            # ──────────── ADMIN COMMANDS ────────────
+            elif msg_type == "ADMIN_KICK_PLAYER":
+                if payload_token.get("role") != "admin": # renamed from payload due to shadowing
+                    await websocket.send_text(make_msg("ERROR", message="Permission refusée."))
+                    continue
+                
+                target_id = payload.get("playerId")
+                if target_id and target_id in manager.active_sessions:
+                    target_ws = manager.active_sessions[target_id]["ws"]
+                    await target_ws.send_text(make_msg("ERROR", message="Vous avez été expulsé par un administrateur."))
+                    await target_ws.close(code=1008, reason="Kicked by admin")
+                    # Close will trigger WebSocketDisconnect block
+
+            elif msg_type == "ADMIN_REGENERATE_MAP":
+                if payload_token.get("role") != "admin":
+                    await websocket.send_text(make_msg("ERROR", message="Permission refusée."))
+                    continue
+                
+                print(f"[WS] Admin {client_id} requests map regeneration for {current_map}")
+                new_state = gameState.regenerate_room(current_map)
+                
+                # Relocalize all players to spawn (0,0 or similar)
+                for cid, info in manager.active_sessions.items():
+                    if info["map_id"] == current_map:
+                        userManager.update_user_position(cid, 10, 10)
+                
+                await manager.broadcast(make_msg("MAP_REGENERATED", payload=new_state), map_id=current_map)
+                
+                # Send updated positions
+                for cid, info in manager.active_sessions.items():
+                    if info["map_id"] == current_map:
+                        await manager.broadcast(make_msg("PLAYER_MOVED", id=cid, x=10, y=10), map_id=current_map, exclude_id=cid)
+                        # send to the player themselves
+                        user_data = userManager.get_or_create_user(cid)
+                        await manager.send_to(cid, make_msg("PLAYER_SYNC", payload=user_data))
+
 
     except WebSocketDisconnect:
         current_m = manager.active_sessions.get(client_id, {}).get("map_id", "farm_main")

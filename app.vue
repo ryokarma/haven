@@ -79,8 +79,10 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useNetworkStore } from '@/stores/network';
+import { usePlayerStore } from '@/stores/player';
 
 const networkStore = useNetworkStore();
+const playerStore = usePlayerStore();
 
 const isAuthenticated = ref(false);
 const isLoginMode = ref(true);
@@ -110,7 +112,10 @@ const handleAuth = async () => {
                 localStorage.setItem('haven_token', data.access_token);
                 localStorage.setItem('haven_player_id', data.player_id);
                 localStorage.setItem('haven_username', data.username);
+                localStorage.setItem('haven_role', data.role);
                 currentUsername.value = data.username;
+                playerStore.username = data.username;
+                playerStore.setRole(data.role);
                 isAuthenticated.value = true;
                 networkStore.connect(data.player_id, data.access_token);
             } else {
@@ -146,10 +151,15 @@ onMounted(() => {
   const token = localStorage.getItem('haven_token');
   const storedId = localStorage.getItem('haven_player_id');
   const uname = localStorage.getItem('haven_username');
+  const role = localStorage.getItem('haven_role');
   
   if (token && storedId) {
       isAuthenticated.value = true;
       currentUsername.value = uname || 'Inconnu';
+      playerStore.username = currentUsername.value;
+      if (role) {
+          playerStore.setRole(role);
+      }
       networkStore.connect(storedId, token);
   }
 });

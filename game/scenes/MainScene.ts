@@ -361,6 +361,29 @@ export class MainScene extends Scene {
                     console.warn('[MainScene] WORLD_STATE/MAP_STATE reçu mais payload absent ou vide.', msg);
                 }
             }
+            else if (msg.type === 'MAP_REGENERATED') {
+                console.log('[MainScene] MAP_REGENERATED reçu - Reconstruction du monde !');
+                if (msg.payload && msg.payload.resources && Array.isArray(msg.payload.resources)) {
+                    // Mettre à jour le store
+                    this.worldStore.loadWorldState(msg.payload);
+
+                    // Nettoyer Phaser explicitement (le bulldozer complet)
+                    this.objectManager.clearObjects();
+                    this.mapManager.clearMap(); // Nettoie le groupe des tuiles 
+
+                    // Reconstruire tout (TileManager va redessiner avec MapManager)
+                    // Il faut régénérer la grid logique
+                    this.mapManager.generate(); // Ce qui fait initGrid() + generateTerrain() + finalizeMap()
+
+                    // On ne repeuple avec populateFromState que si on est sur le même modèle, 
+                    // mais MAP_REGENERATED envoie la nouvelle shape du serverObjects 
+                    this.mapManager.populateFromState(msg.payload.resources);
+                    this.pathfindingManager.updateGrid(this.mapManager.gridData);
+
+                    // On peut ajouter un petit log/feedback
+                    this.playerStore.lastActionFeedback = "Le monde a été régénéré !#" + Date.now();
+                }
+            }
             else if (msg.type === 'RESOURCE_PLACED') {
                 this.mapManager.addResource(msg.resource);
             }

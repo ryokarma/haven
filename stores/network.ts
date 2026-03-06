@@ -169,6 +169,17 @@ export const useNetworkStore = defineStore('network', () => {
         send('ACTION_PLACE', { x, y, itemId: item_id });
     }
 
+    // --- Admin ---
+    function sendAdminKick(playerId: string) {
+        console.log(`[Network] → ADMIN_KICK_PLAYER: target=${playerId}`);
+        send('ADMIN_KICK_PLAYER', { playerId });
+    }
+
+    function sendAdminRegenerateMap() {
+        console.log(`[Network] → ADMIN_REGENERATE_MAP`);
+        send('ADMIN_REGENERATE_MAP');
+    }
+
     // --- Listeners Auto ---
 
     function listenForEconomy() {
@@ -232,6 +243,8 @@ export const useNetworkStore = defineStore('network', () => {
         sendHarvest,
         sendCraft,
         sendPlace,
+        sendAdminKick,
+        sendAdminRegenerateMap,
         listenForEconomy,
         listenForChatMessages,
         listenForErrors,

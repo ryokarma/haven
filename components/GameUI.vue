@@ -5,6 +5,7 @@ import { useWorldStore } from '@/stores/world';
 import { useNetworkStore } from '@/stores/network';
 import CraftingWindow from './CraftingWindow.vue';
 import CharacterWindow from './CharacterWindow.vue';
+import AdminWindow from './AdminWindow.vue';
 
 const player = usePlayerStore();
 const world = useWorldStore();
@@ -12,6 +13,7 @@ const networkStore = useNetworkStore();
 const isInventoryOpen = ref(false);
 const isCraftingOpen = ref(false);
 const isCharacterOpen = ref(false);
+const isAdminOpen = ref(false);
 
 
 
@@ -208,6 +210,11 @@ watch(() => player.lastActionFeedback, (newVal) => {
         @close="isCharacterOpen = false" 
     />
 
+    <AdminWindow 
+        v-if="isAdminOpen" 
+        @close="isAdminOpen = false" 
+    />
+
     <div class="absolute bottom-4 right-4 pointer-events-auto flex items-center gap-3 z-10" @click.stop @mousedown.stop @touchstart.stop>
           <!-- Bouton Crafting -->
           <button 
@@ -216,6 +223,18 @@ watch(() => player.lastActionFeedback, (newVal) => {
             title="Artisanat"
           >
              <span v-html="icons.hammer"></span>
+          </button>
+
+          <!-- Bouton Admin (Caché si pas admin) -->
+          <button 
+            v-if="player.role === 'admin'"
+            @click="isAdminOpen = !isAdminOpen"
+            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-900/80 backdrop-blur-xl text-rose-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-rose-800 hover:border-rose-400/50 active:scale-95"
+            title="Administration"
+          >
+             <div class="relative">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+             </div>
           </button>
 
           <!-- Bouton Personnage (Nouveau) -->

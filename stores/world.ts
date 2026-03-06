@@ -121,10 +121,14 @@ export const useWorldStore = defineStore('world', {
 
         /**
          * Reçoit et stocke l'état initial du monde envoyé par le serveur (WORLD_STATE).
-         * Le payload est { resources: ServerWorldObject[] }.
+         * Le payload est { resources: ServerWorldObject[], seed?: number|string }.
          * Les objets sont stockés dans `serverObjects` pour être consommés par l'ObjectManager.
          */
-        loadWorldState(payload: { resources?: ServerWorldObject[] }) {
+        loadWorldState(payload: { resources?: ServerWorldObject[], seed?: number | string }) {
+            if (payload?.seed) {
+                this.worldSeed = payload.seed.toString();
+                console.log(`[WorldStore] Seed mise à jour depuis le serveur: ${this.worldSeed}`);
+            }
             if (payload?.resources && Array.isArray(payload.resources)) {
                 this.serverObjects = payload.resources;
                 console.log(`[WorldStore] ${this.serverObjects.length} objet(s) du monde chargés depuis le serveur.`);

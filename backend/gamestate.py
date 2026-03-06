@@ -153,21 +153,22 @@ def _generate_world(seed: int) -> List[Dict[str, Any]]:
 WORLD_FILE = os.path.join("backend", "data", "world.json")
 
 class RoomState:
-    def __init__(self, map_id: str, resources: List[Dict[str, Any]], width: int = 100, height: int = 100):
+    def __init__(self, map_id: str, resources: List[Dict[str, Any]], width: int = 100, height: int = 100, seed: int = WORLD_SEED):
         self.map_id = map_id
         self.resources = resources
         self.width = width
         self.height = height
+        self.seed = seed
         self._spatial_index: Dict[tuple, Dict[str, Any]] = {
             (r["x"], r["y"]): r for r in self.resources
         }
 
 def generate_room_state(map_id: str, seed: int) -> RoomState:
     if map_id.startswith("housing_"):
-        return RoomState(map_id, [], 30, 30)
+        return RoomState(map_id, [], 30, 30, seed)
     else:
         resources = _generate_world(seed)
-        return RoomState(map_id, resources, 100, 100)
+        return RoomState(map_id, resources, 100, 100, seed)
 
 class GameState:
     def __init__(self):
@@ -204,8 +205,17 @@ class GameState:
             "map_id": room.map_id,
             "width": room.width,
             "height": room.height,
+            "seed": room.seed,
             "resources": room.resources
         }
+        
+    def regenerate_room(self, map_id: str = "farm_main") -> Dict[str, Any]:
+        """Regenerate the entire room with a new seed and return the new state."""
+        import random
+        # Give a new seed
+        new_seed = random.randint(1, 1000000)
+        self.maps[map_id] = generate_room_state(map_id, new_seed)
+        return self.get_full_state(map_id)
 
     def get_resource_at(self, map_id: str, x: int, y: int) -> Optional[Dict[str, Any]]:
         """Retourne la ressource à (x, y) ou None — O(1) grâce à l'index spatial."""
