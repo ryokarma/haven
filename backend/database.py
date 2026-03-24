@@ -7,7 +7,8 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 import os
 
 # Variables de connexion SQLite Asynchrone
-DATABASE_URL = "sqlite+aiosqlite:///./haven.db"
+# Utilise un fallback vers le fichier local par défaut, mais peut être surchargé (ex: par Docker Compose)
+DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./haven.db")
 
 # Create the async engine
 engine = create_async_engine(DATABASE_URL, echo=True, connect_args={"check_same_thread": False})

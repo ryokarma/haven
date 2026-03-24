@@ -1,0 +1,11 @@
+node_modules
+.nuxt
+.output
+dist
+.env
+*.log
+npm-debug.log
+yarn-error.log
+backend
+haven.db
+.git

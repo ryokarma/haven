@@ -26,6 +26,13 @@ export const useNetworkStore = defineStore('network', () => {
     const error = ref<string | null>(null);
     const lastPing = ref(0);
 
+    // Anti-boucle reconnexion
+    let shouldReconnect = true;
+    let reconnectAttempts = 0;
+    const MAX_RECONNECT_ATTEMPTS = 5;
+    // Flag exposé pour que app.vue puisse détecter un logout forcé
+    const authFailed = ref(false);
+
     // Callbacks pour la gestion des messages
     const onMessageCallbacks = ref<Array<(msg: any) => void>>([]);
 
@@ -85,6 +92,11 @@ export const useNetworkStore = defineStore('network', () => {
             return;
         }
 
+        // Reset des flags de reconnexion à chaque appel explicite
+        shouldReconnect = true;
+        reconnectAttempts = 0;
+        authFailed.value = false;
+
         const url = `ws://localhost:8000/ws/${playerId}?token=${token}`;
         console.log(`[Network] Connexion à ${url}...`);
 
@@ -96,6 +108,7 @@ export const useNetworkStore = defineStore('network', () => {
                 isConnected.value = true;
                 error.value = null;
                 lastPing.value = Date.now();
+                reconnectAttempts = 0; // Reset on success
             };
 
             ws.onmessage = (event) => {
@@ -103,11 +116,48 @@ export const useNetworkStore = defineStore('network', () => {
             };
 
             ws.onclose = (event) => {
-                console.log('[Network] Déconnecté.', event.reason);
+                console.log('[Network] Déconnecté.', event.reason, 'code:', event.code);
                 cleanup();
+
+                // ── Sécurité anti-boucle : Codes d'erreur d'authentification ──
+                // 1008 = Policy Violation (token expiré/invalide)
+                // 403, 4001, 4003 = Custom auth errors
+                const AUTH_ERROR_CODES = [1008, 403, 4001, 4003];
+                if (AUTH_ERROR_CODES.includes(event.code)) {
+                    console.error('[Network] ❌ Authentification refusée (code:', event.code, '). STOP reconnexion.');
+                    error.value = "Session expirée ou token invalide. Veuillez vous reconnecter.";
+                    shouldReconnect = false;
+                    authFailed.value = true;
+
+                    // Nettoyage du localStorage corrompu
+                    localStorage.removeItem('haven_token');
+                    localStorage.removeItem('haven_player_id');
+                    localStorage.removeItem('haven_username');
+                    localStorage.removeItem('haven_role');
+
+                    // PAS de window.location.reload() — on laisse app.vue gérer via authFailed
+                    return;
+                }
+
+                // ── Sécurité anti-boucle : déconnexion volontaire ou max retries ──
+                if (!shouldReconnect) {
+                    console.log('[Network] Reconnexion désactivée (déconnexion volontaire).');
+                    return;
+                }
+
+                reconnectAttempts++;
+                if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
+                    console.error(`[Network] ❌ Max reconnexion atteint (${MAX_RECONNECT_ATTEMPTS}). STOP.`);
+                    error.value = "Impossible de se reconnecter au serveur.";
+                    shouldReconnect = false;
+                    return;
+                }
+
+                console.log(`[Network] Tentative de reconnexion ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS} dans 3s...`);
                 setTimeout(() => {
-                    console.log('[Network] Tentative de reconnexion...');
-                    connect(playerId, token);
+                    if (shouldReconnect) {
+                        connect(playerId, token);
+                    }
                 }, 3000);
             };
 
@@ -125,6 +175,7 @@ export const useNetworkStore = defineStore('network', () => {
     }
 
     function disconnect() {
+        shouldReconnect = false; // Empêche la reconnexion automatique
         cleanup();
     }
 
@@ -232,6 +283,7 @@ export const useNetworkStore = defineStore('network', () => {
         error,
         lastPing,
         onMessageCallbacks,
+        authFailed,
 
         // Actions
         connect,

@@ -77,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, watch } from 'vue';
 import { useNetworkStore } from '@/stores/network';
 import { usePlayerStore } from '@/stores/player';
 
@@ -90,6 +90,16 @@ const username = ref('');
 const password = ref('');
 const errorMessage = ref('');
 const currentUsername = ref('');
+
+// Watcher : si le serveur rejette le token en cours de session,
+// on retourne automatiquement sur l'écran de login
+watch(() => networkStore.authFailed, (failed) => {
+    if (failed) {
+        isAuthenticated.value = false;
+        errorMessage.value = networkStore.error || 'Session expirée. Veuillez vous reconnecter.';
+        password.value = '';
+    }
+});
 
 const toggleMode = () => {
   isLoginMode.value = !isLoginMode.value;
@@ -147,22 +157,9 @@ const handleAuth = async () => {
     }
 };
 
-onMounted(() => {
-  const token = localStorage.getItem('haven_token');
-  const storedId = localStorage.getItem('haven_player_id');
-  const uname = localStorage.getItem('haven_username');
-  const role = localStorage.getItem('haven_role');
-  
-  if (token && storedId) {
-      isAuthenticated.value = true;
-      currentUsername.value = uname || 'Inconnu';
-      playerStore.username = currentUsername.value;
-      if (role) {
-          playerStore.setRole(role);
-      }
-      networkStore.connect(storedId, token);
-  }
-});
+// NOTE: Pas de onMounted auto-connect.
+// Le joueur DOIT passer par le formulaire de login.
+// Cela empêche la boucle 403 avec un token expiré.
 </script>
 
 <style>

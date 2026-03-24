@@ -104,8 +104,9 @@ def _generate_world(seed: int) -> List[Dict[str, Any]]:
     - Applique les règles de génération en cascade (tirage unique par case)
     - Retourne une liste compacte de dicts {id, asset, type, x, y}
     """
-    # Pré-calcul des tuiles d'eau
-    water_tiles = _compute_water_tiles(seed)
+    # Pré-calcul des tuiles d'eau : On force WORLD_SEED car le front 
+    # génère TOUJOURS le terrain avec seed=42 (via Perlin.ts qui override le seed)
+    water_tiles = _compute_water_tiles(WORLD_SEED)
 
     rng = random.Random(seed)
     resources: List[Dict[str, Any]] = []
@@ -216,6 +217,27 @@ class GameState:
         new_seed = random.randint(1, 1000000)
         self.maps[map_id] = generate_room_state(map_id, new_seed)
         return self.get_full_state(map_id)
+
+    def get_safe_spawn(self, map_id: str = "farm_main") -> tuple[int, int]:
+        """Trouve une coordonnée sûre (sans eau, sans obstacle) près du centre."""
+        room = self.maps.get(map_id)
+        if not room:
+            return (10, 10)
+            
+        water_tiles = _compute_water_tiles(WORLD_SEED)
+        cx, cy = MAP_SIZE // 2, MAP_SIZE // 2
+        
+        coords = [(x, y) for x in range(MAP_SIZE) for y in range(MAP_SIZE)]
+        coords.sort(key=lambda pos: (pos[0]-cx)**2 + (pos[1]-cy)**2)
+        
+        for x, y in coords:
+            if (x, y) in water_tiles:
+                continue
+            if (x, y) in room._spatial_index:
+                continue
+            return (x, y)
+            
+        return (10, 10)
 
     def get_resource_at(self, map_id: str, x: int, y: int) -> Optional[Dict[str, Any]]:
         """Retourne la ressource à (x, y) ou None — O(1) grâce à l'index spatial."""

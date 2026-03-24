@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - backend_data:/app/data
+    environment:
+      # Surcharge de la variable pour sauvegarder dans le répertoire partagé (volume docker)
+      - DATABASE_URL=sqlite+aiosqlite:///./data/haven.db
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  backend_data:

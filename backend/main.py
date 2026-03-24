@@ -518,17 +518,20 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 print(f"[WS] Admin {client_id} requests map regeneration for {current_map}")
                 new_state = gameState.regenerate_room(current_map)
                 
-                # Relocalize all players to spawn (0,0 or similar)
+                safe_x, safe_y = gameState.get_safe_spawn(current_map)
+                print(f"[WS] Safe spawn calculated: {safe_x}, {safe_y}")
+
+                # Relocalize all players to the safe spawn
                 for cid, info in manager.active_sessions.items():
                     if info["map_id"] == current_map:
-                        userManager.update_user_position(cid, 10, 10)
+                        userManager.update_user_position(cid, safe_x, safe_y)
                 
                 await manager.broadcast(make_msg("MAP_REGENERATED", payload=new_state), map_id=current_map)
                 
                 # Send updated positions
                 for cid, info in manager.active_sessions.items():
                     if info["map_id"] == current_map:
-                        await manager.broadcast(make_msg("PLAYER_MOVED", id=cid, x=10, y=10), map_id=current_map, exclude_id=cid)
+                        await manager.broadcast(make_msg("PLAYER_MOVED", id=cid, x=safe_x, y=safe_y), map_id=current_map, exclude_id=cid)
                         # send to the player themselves
                         user_data = userManager.get_or_create_user(cid)
                         await manager.send_to(cid, make_msg("PLAYER_SYNC", payload=user_data))
