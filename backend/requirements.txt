@@ -1,5 +1,8 @@
 fastapi
-uvicorn
+uvicorn[standard]
 pydantic
 bcrypt
 PyJWT
+sqlalchemy
+aiosqlite
+websockets
