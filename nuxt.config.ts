@@ -1,5 +1,12 @@
 // nuxt.config.ts
 export default defineNuxtConfig({
+  runtimeConfig: {
+    public: {
+      // @ts-ignore
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || 'http://localhost:8000'
+    }
+  },
+
   devtools: { enabled: true },
 
   // On active le module Tailwind

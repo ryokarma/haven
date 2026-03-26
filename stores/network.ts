@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef } from 'vue';
+import { useRuntimeConfig } from '#imports';
 import { usePlayerStore } from './player';
 import { useChatStore } from './chat';
 
@@ -20,6 +21,9 @@ import { useChatStore } from './chat';
  * - ERROR
  */
 export const useNetworkStore = defineStore('network', () => {
+    const config = useRuntimeConfig();
+    const apiBase = (config.public.apiBase as string) || 'http://localhost:8000';
+
     // --- State ---
     const isConnected = ref(false);
     const socket = shallowRef<WebSocket | null>(null);
@@ -97,7 +101,9 @@ export const useNetworkStore = defineStore('network', () => {
         reconnectAttempts = 0;
         authFailed.value = false;
 
-        const url = `ws://localhost:8000/ws/${playerId}?token=${token}`;
+        const protocol = apiBase.startsWith('https') ? 'wss://' : 'ws://';
+        const baseDomain = apiBase.replace(/^https?:\/\//, '');
+        const url = `${protocol}${baseDomain}/ws/${playerId}?token=${token}`;
         console.log(`[Network] Connexion à ${url}...`);
 
         try {

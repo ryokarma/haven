@@ -78,8 +78,12 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue';
+import { useRuntimeConfig } from '#imports';
 import { useNetworkStore } from '@/stores/network';
 import { usePlayerStore } from '@/stores/player';
+
+const config = useRuntimeConfig();
+const apiBase = config.public.apiBase;
 
 const networkStore = useNetworkStore();
 const playerStore = usePlayerStore();
@@ -112,7 +116,7 @@ const handleAuth = async () => {
     if (isLoginMode.value) {
         // Login
         try {
-            const res = await fetch("http://localhost:8000/login", {
+            const res = await fetch(`${apiBase}/login`, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({username: username.value, password: password.value})
@@ -138,7 +142,7 @@ const handleAuth = async () => {
     } else {
         // Register
         try {
-            const res = await fetch("http://localhost:8000/register", {
+            const res = await fetch(`${apiBase}/register`, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({username: username.value, password: password.value})

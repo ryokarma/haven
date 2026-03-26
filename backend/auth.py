@@ -1,8 +1,9 @@
+import os
 import jwt
 import bcrypt
 from datetime import datetime, timedelta
 
-SECRET_KEY = "haven_super_secret_key" # Clé secrète temporaire pour MVP
+SECRET_KEY = os.getenv("SECRET_KEY", "haven_super_secret_key_dev_default")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 

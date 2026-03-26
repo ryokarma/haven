@@ -9,9 +9,8 @@ services:
       - "8000:8000"
     volumes:
       - backend_data:/app/data
-    environment:
-      # Surcharge de la variable pour sauvegarder dans le répertoire partagé (volume docker)
-      - DATABASE_URL=sqlite+aiosqlite:///./data/haven.db
+    env_file:
+      - .env
     restart: unless-stopped
 
   frontend:
@@ -22,6 +21,8 @@ services:
       - "3000:3000"
     depends_on:
       - backend
+    env_file:
+      - .env
     restart: unless-stopped
 
 volumes:
