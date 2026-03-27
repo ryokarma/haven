@@ -83,7 +83,7 @@ import { useNetworkStore } from '@/stores/network';
 import { usePlayerStore } from '@/stores/player';
 
 const config = useRuntimeConfig();
-const apiBase = config.public.apiBase;
+const apiUrl = config.public.apiUrl;
 
 const networkStore = useNetworkStore();
 const playerStore = usePlayerStore();
@@ -116,7 +116,7 @@ const handleAuth = async () => {
     if (isLoginMode.value) {
         // Login
         try {
-            const res = await fetch(`${apiBase}/login`, {
+            const res = await fetch(`${apiUrl}/login`, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({username: username.value, password: password.value})
@@ -142,7 +142,7 @@ const handleAuth = async () => {
     } else {
         // Register
         try {
-            const res = await fetch(`${apiBase}/register`, {
+            const res = await fetch(`${apiUrl}/register`, {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
                 body: JSON.stringify({username: username.value, password: password.value})

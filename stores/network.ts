@@ -22,7 +22,7 @@ import { useChatStore } from './chat';
  */
 export const useNetworkStore = defineStore('network', () => {
     const config = useRuntimeConfig();
-    const apiBase = (config.public.apiBase as string) || 'http://localhost:8000';
+    const wsUrl = (config.public.wsUrl as string) || 'ws://localhost:8000';
 
     // --- State ---
     const isConnected = ref(false);
@@ -101,9 +101,7 @@ export const useNetworkStore = defineStore('network', () => {
         reconnectAttempts = 0;
         authFailed.value = false;
 
-        const protocol = apiBase.startsWith('https') ? 'wss://' : 'ws://';
-        const baseDomain = apiBase.replace(/^https?:\/\//, '');
-        const url = `${protocol}${baseDomain}/ws/${playerId}?token=${token}`;
+        const url = `${wsUrl}/ws/${playerId}?token=${token}`;
         console.log(`[Network] Connexion à ${url}...`);
 
         try {
