@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — Haven
 
 > **État du projet : MVP Fonctionnel (Alpha 0.1)**
-> Dernière mise à jour : 22/02/2026
+> Dernière mise à jour : 27/03/2026
 
 ---
 
@@ -229,3 +229,4 @@
 | 23.0 | 24/03/2026 | Session 9 : Déploiement & Containerisation | Création de la configuration Docker : Dockerfile racine (Frontend Nuxt 4, Node 20), Dockerfile `/backend` (FastAPI, Python 3.11), et `.dockerignore` appropriés (incluant la non-copie de `haven.db`). Orchéstration par `docker-compose.yml` (`3000:3000`, `8000:8000`) avec volume persistant `backend_data:/app/data`. Ajustement de `database.py` configurer dynamiquement (`DATABASE_URL`). Correction 1 : Ajout approfondi des dépendances (sqlalchemy, aiosqlite, websockets) dans `requirements.txt`. Correction 2 : Restructuration architecture conteneur python. Ajout `ENV PYTHONPATH=/app`, copie en tant que module dans `/app/backend/` et update de l'ENTRYPOINT vers `backend.main:app` pour réparer l'erreur `ModuleNotFoundError`. |
 | 23.1 | 26/03/2026 | Session 9 : Dette Technique Sécurité | Génération crypto-sécurisée de `SECRET_KEY`, intégration dans `auth.py` via `os.getenv`. Refactor de `docker-compose.yml` pour utiliser un fichier `.env`. Création de `.env.example` à la racine pour documenter cette obligation en production. |
 | 23.2 | 26/03/2026 | Session 9 : Environnement Dynamique | Substitution des chemins localhost codés en dur par `useRuntimeConfig` (`NUXT_PUBLIC_API_BASE`). Conversion automatique du protocole WebSocket (`ws://` / `wss://`) selon l'URL de base définie. Configuration dynamique du CORS FastAPI via `ALLOWED_ORIGINS`. Migration globale vers un pilotage 100% via variables d'environnement. |
+| 23.3 | 27/03/2026 | Déploiement : Port Frontend | Changement du port externe du conteneur frontend vers 3001 (mapping 3001:3000) dans `docker-compose.yml` pour éviter le conflit avec l'interface d'administration de Dokploy qui écoute déjà sur le port 3000. |
