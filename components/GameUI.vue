@@ -33,14 +33,6 @@ const getIcon = (name: string) => {
   return '📦'; 
 };
 
-// Fonction de Reset (Debug)
-const resetSave = () => {
-    if (window.confirm("ATTENTION : Tout effacer ? (Inventaire, Map, Progression)\nCette action est irréversible.")) {
-        localStorage.clear();
-        window.location.reload();
-    }
-};
-
 
 // Fonction pour consommer un item
 const handleItemClick = (itemName: string) => {
@@ -68,18 +60,6 @@ watch(() => player.lastActionFeedback, (newVal) => {
 <template>
   <div class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6">
     
-    <!-- BOUTON RESET (Debug) -->
-    <div class="pointer-events-auto absolute top-4 right-4 z-[100] flex flex-col gap-2" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
-        <button 
-            @click="resetSave"
-            class="flex items-center gap-2 bg-red-600/20 hover:bg-red-600/80 border border-red-500/50 text-red-200 hover:text-white text-[10px] font-bold px-3 py-1.5 rounded uppercase tracking-wider backdrop-blur-sm shadow-lg transition-all active:scale-95"
-            title="Effacer la sauvegarde et recommencer"
-        >
-            <span>🗑️</span>
-            <span>Reset Save</span>
-        </button>
-    </div>
-
     <!-- PLAYER LIST WIDGET -->
     <PlayerListWidget />
     

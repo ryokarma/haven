@@ -19,6 +19,13 @@ const regenerateMap = () => {
     }
 };
 
+const resetSave = () => {
+    if (confirm("ATTENTION : Tout effacer côté client ?\nCette action vide le stockage local (cache) et recharge le jeu.")) {
+        localStorage.clear();
+        window.location.reload();
+    }
+};
+
 </script>
 
 <template>
@@ -67,10 +74,16 @@ const regenerateMap = () => {
               Danger Zone
               <span class="flex-1 h-px bg-rose-500/20"></span>
           </h3>
-          <button @click="regenerateMap" class="w-full py-4 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(225,29,72,0.4)] border border-red-400/30 transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center gap-1">
-              <span class="text-lg">Régénérer la Map</span>
-              <span class="text-[10px] text-red-200/70 font-normal normal-case">Efface tout le contenu généré et placé</span>
-          </button>
+          <div class="flex flex-col gap-2">
+            <button @click="regenerateMap" class="w-full py-3 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-black uppercase tracking-widest shadow-[0_0_20px_rgba(225,29,72,0.4)] border border-red-400/30 transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center gap-1">
+                <span class="text-lg">Régénérer la Map</span>
+                <span class="text-[10px] text-red-200/70 font-normal normal-case">Efface tout le contenu généré et placé</span>
+            </button>
+            <button @click="resetSave" class="w-full py-2.5 rounded-xl bg-orange-800/80 hover:bg-orange-600 text-white font-black uppercase tracking-widest border border-orange-500/30 transition-all hover:scale-[1.02] active:scale-95 flex flex-col items-center justify-center gap-1">
+                <span class="text-sm">Hard Reset Client</span>
+                <span class="text-[10px] text-orange-200/70 font-normal normal-case">Vide le stockage local et force une nouvelle session</span>
+            </button>
+          </div>
       </div>
 
     </div>
