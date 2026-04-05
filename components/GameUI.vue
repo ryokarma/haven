@@ -155,13 +155,13 @@ watch(() => player.lastActionFeedback, (newVal) => {
             </button>
         </div>
         
-        <div v-if="player.inventory.length === 0" class="flex h-32 flex-col items-center justify-center text-slate-400 italic gap-2">
+        <div v-if="player.resourceInventory.length === 0" class="flex h-32 flex-col items-center justify-center text-slate-400 italic gap-2">
             <span class="text-4xl opacity-20">🎒</span>
             Vide... Récoltez des ressources !
         </div>
         
         <div v-else class="grid grid-cols-4 gap-3">
-            <div v-for="(item, idx) in player.inventory" :key="idx" 
+            <div v-for="(item, idx) in player.resourceInventory" :key="idx" 
                  @click="handleItemClick(item.name)"
                  @contextmenu.prevent="player.equipItem(item.name)"
                  title="Clic: Utiliser/Équiper | Clic Droit: Équiper"
@@ -240,7 +240,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
           >
             <div class="relative">
                 <span v-html="icons.bag"></span>
-                <span v-if="player.inventory.length > 0" class="absolute -top-2 -right-3 h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]"></span>
+                <span v-if="player.resourceInventory.length > 0" class="absolute -top-2 -right-3 h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]"></span>
             </div>
           </button>
       </div>

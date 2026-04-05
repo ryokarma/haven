@@ -49,7 +49,6 @@ export interface PlayerState {
         mainHand: InventoryItem | null;
         accessory: InventoryItem | null;
     };
-    hotbar: (string | null)[];
     activeItemSlot: number | null;
 }
 
@@ -154,20 +153,38 @@ export const usePlayerStore = defineStore('player', {
             mainHand: null,
             accessory: null
         },
-        hotbar: [
-            'Hache en pierre',
-            'tool_pickaxe',
-            'tool_shovel',
-            'tool_knife',
-            'Bois',
-            'Pierre',
-            'furnace',
-            'clay_pot',
-            'cotton_seeds'
-        ],
         activeItemSlot: null
     }),
     getters: {
+        resourceInventory(state): InventoryItem[] {
+            return state.inventory.filter(item => {
+                const info = getItemData(item.name);
+                return !info || info.type === 'resource' || info.type === 'consumable';
+            });
+        },
+        toolInventory(state): InventoryItem[] {
+            return state.inventory.filter(item => {
+                const info = getItemData(item.name);
+                // On inclut les items plaçables car le placement passe par 'mainHand' ou le système d'équipement Phaser
+                return info && (info.type === 'tool' || info.type === 'equipment' || info.type === 'seed' || ['furnace', 'clay_pot', 'Kit de Feu de Camp'].includes(item.name));
+            });
+        },
+        hotbar(state): (string | null)[] {
+            // Construit dynamiquement la hotbar à partir de `toolInventory`
+            // Le "this" context dans Pinia getters a accès aux autres getters !
+            // Mais state est fourni. On doit utiliser `usePlayerStore` ou re-filtrer.
+            // Le plus sûr est de refiltrer :
+            const tools = state.inventory.filter(item => {
+                const info = getItemData(item.name);
+                return info && (info.type === 'tool' || info.type === 'equipment' || info.type === 'seed' || ['furnace', 'clay_pot', 'Kit de Feu de Camp'].includes(item.name));
+            }).map(i => i.name);
+            
+            const slots = Array(9).fill(null);
+            for(let i=0; i<Math.min(tools.length, 9); i++){
+               slots[i] = tools[i];
+            }
+            return slots;
+        },
         statsModifiers(state): { harvestCost: number } {
             const mainHand = state.equipment.mainHand;
             // Verif simple pour l'existant. Pour le futur, vérifier toolType via getItemData
@@ -196,6 +213,7 @@ export const usePlayerStore = defineStore('player', {
         },
 
         setActiveItemSlot(index: number) {
+            // L'accès au getter "hotbar" via this.hotbar (Pinia gère les getters via this)
             if (this.activeItemSlot === index) {
                 this.activeItemSlot = null;
                 this.equipment.mainHand = null;
@@ -204,7 +222,8 @@ export const usePlayerStore = defineStore('player', {
             }
 
             this.activeItemSlot = index;
-            const itemName = this.hotbar[index];
+            // On a accès aux getters sur `this`
+            const itemName = (this as any).hotbar[index];
 
             if (!itemName) {
                 this.equipment.mainHand = null;
