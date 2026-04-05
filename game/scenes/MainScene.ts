@@ -386,7 +386,7 @@ export class MainScene extends Scene {
                     this.playerStore.lastActionFeedback = "Le monde a été régénéré !#" + Date.now();
                 }
             }
-            else if (msg.type === 'RESOURCE_PLACED') {
+            else if (msg.type === 'RESOURCE_PLACED' || msg.type === 'RESOURCE_RESPAWNED') {
                 this.mapManager.addResource(msg.resource);
             }
             else if (msg.type === 'RESOURCE_REMOVED') {

@@ -12,6 +12,15 @@ import math
 import os
 from typing import List, Dict, Any, Optional, Set, Union
 
+# Temps de respawn en secondes (Time-To-Live)
+RESPAWN_TIMES = {
+    "tree": 180,        # 3 minutes
+    "rock": 300,        # 5 minutes
+    "cotton_bush": 120, # 2 minutes
+    "clay_node": 180,   # 3 minutes
+    "apple_tree": 300,  # 5 minutes
+}
+
 from backend.perlin import Perlin
 
 
@@ -163,6 +172,7 @@ class RoomState:
         self._spatial_index: Dict[tuple, Dict[str, Any]] = {
             (r["x"], r["y"]): r for r in self.resources
         }
+        self.respawn_queue: List[Dict[str, Any]] = []
 
 def generate_room_state(map_id: str, seed: int) -> RoomState:
     if map_id.startswith("housing_"):
@@ -261,9 +271,45 @@ class GameState:
         if res is not None:
             try:
                 room.resources.remove(res)
+                # Ajout à la file de respawn si l'objet est géré
+                asset = res.get("asset")
+                if asset in RESPAWN_TIMES:
+                    respawn_at = time.time() + RESPAWN_TIMES[asset]
+                    room.respawn_queue.append({"resource": res, "respawn_at": respawn_at})
             except ValueError:
                 pass  # Déjà absent — incohérence ignorée silencieusement
         return res
+
+    def check_respawns(self, map_id: str) -> List[Dict[str, Any]]:
+        """Vérifie la file de respawn et restaure les objets dont le TTL a expiré."""
+        room = self.maps.get(map_id)
+        if not room:
+            return []
+            
+        now = time.time()
+        respawned = []
+        keep_queue = []
+        
+        for item in room.respawn_queue:
+            if now >= item["respawn_at"]:
+                res = item["resource"]
+                rx, ry = res["x"], res["y"]
+                # Vérifie si la case est toujours vide
+                if (rx, ry) not in room._spatial_index:
+                    # On ressuscite ! On lui donne un nouvel ID unique
+                    res["id"] = f"{res['asset']}_{rx}_{ry}_{int(time.time())}"
+                    room.resources.append(res)
+                    room._spatial_index[(rx, ry)] = res
+                    respawned.append(res)
+                else:
+                    # Case occupée, on reporte le respawn de 60 secondes
+                    item["respawn_at"] = now + 60
+                    keep_queue.append(item)
+            else:
+                keep_queue.append(item)
+                
+        room.respawn_queue = keep_queue
+        return respawned
 
     def harvest_resource(self, player_id: str, map_id: str, resource_id: str, equipped_tool: str, user_manager: Any) -> Optional[Union[tuple[Dict[str, Any], Dict[str, int], Dict[str, int]], str]]:
         """

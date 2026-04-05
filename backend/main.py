@@ -6,9 +6,10 @@ FastAPI + WebSocket — MVP Alpha 0.1
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict
+from typing import Dict, Any
 import json
 import time
+import asyncio
 
 from backend.gamestate import GameState
 from backend.usermanager import UserManager
@@ -45,6 +46,22 @@ async def startup():
         except Exception:
             pass
     print("[DB] Tables SQLite créées ou vérifiées et colonnes migrées.")
+    
+    # Démarrage de la tâche de fond pour le respawn
+    asyncio.create_task(respawn_loop())
+
+async def respawn_loop():
+    print("[Respawn] Boucle de respawn démarrée.")
+    while True:
+        await asyncio.sleep(10)  # Check every 10 seconds
+        for map_id in list(gameState.maps.keys()):
+            respawned_items = gameState.check_respawns(map_id)
+            for res in respawned_items:
+                print(f"[Respawn] {res['asset']} est réapparu en ({res['x']}, {res['y']}) sur {map_id}.")
+                await manager.broadcast(make_msg(
+                    "RESOURCE_RESPAWNED",
+                    resource=res
+                ), map_id=map_id)
 
 import os
 
