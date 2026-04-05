@@ -14,6 +14,7 @@ export interface ServerWorldObject {
 
 export interface RemotePlayer {
     id: string;
+    username: string;
     x: number;
     y: number;
 }
@@ -163,12 +164,13 @@ export const useWorldStore = defineStore('world', {
                 const pId = typeof p === 'string' ? p : p.id;
                 const pX = typeof p === 'string' ? 10 : (p.x !== undefined ? p.x : 10);
                 const pY = typeof p === 'string' ? 10 : (p.y !== undefined ? p.y : 10);
-                this.otherPlayers[pId] = { id: pId, x: pX, y: pY };
+                const pUsername = typeof p === 'string' ? 'Inconnu' : (p.username || 'Inconnu');
+                this.otherPlayers[pId] = { id: pId, username: pUsername, x: pX, y: pY };
             });
         },
 
-        addOtherPlayer(id: string, x: number, y: number) {
-            this.otherPlayers[id] = { id, x, y };
+        addOtherPlayer(id: string, x: number, y: number, username: string = 'Inconnu') {
+            this.otherPlayers[id] = { id, username, x, y };
         },
 
         removeOtherPlayer(id: string) {
@@ -180,6 +182,7 @@ export const useWorldStore = defineStore('world', {
                 this.otherPlayers[id].x = x;
                 this.otherPlayers[id].y = y;
             } else {
+                // If moving and not present, add them with generic name
                 this.addOtherPlayer(id, x, y);
             }
         }

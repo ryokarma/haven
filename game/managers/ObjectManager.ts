@@ -395,7 +395,7 @@ export class ObjectManager {
     /**
      * Ajoute un joueur distant
      */
-    addRemotePlayer(id: string, x: number, y: number): void {
+    addRemotePlayer(id: string, x: number, y: number, username?: string): void {
         if (this.remotePlayers.has(id)) return;
 
         // Use 'hero' texture which we know exists
@@ -409,20 +409,21 @@ export class ObjectManager {
         playerSprite.setDepth(actualY + (x * 0.001));
 
         // Ajout d'un texte flottant avec l'ID du joueur, pour le différencier
-        const shortId = id.substring(0, 8); // On raccourcit un peu si c'est un UUID long
-        const nameText = this.scene.add.text(x, actualY - 60, `Joueur ${shortId}`, {
+        const displayedName = username || `Joueur ${id.substring(0, 8)}`;
+        const nameText = this.scene.add.text(x, actualY - 60, displayedName, {
             fontFamily: 'Arial',
-            fontSize: '12px',
-            color: '#ffffff',
+            fontSize: '14px',
+            color: '#fbbf24', // Amber color for name
             stroke: '#000000',
-            strokeThickness: 3
+            strokeThickness: 4, // Make it readable
+            shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, stroke: true, fill: true }
         });
         nameText.setOrigin(0.5, 0.5);
         nameText.setDepth(999999);
         playerSprite.setData('nameText', nameText);
 
         this.remotePlayers.set(id, playerSprite);
-        console.log(`[ObjectManager] Added remote player ${id}`);
+        console.log(`[ObjectManager] Added remote player ${id} with name ${displayedName}`);
     }
 
     /**

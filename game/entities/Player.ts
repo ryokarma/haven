@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { IsoMath } from '../utils/IsoMath';
 import { GameConfig } from '../config/GameConfig';
 import { RENDER_OFFSETS } from '../managers/ObjectManager';
+import { usePlayerStore } from '@/stores/player';
 
 /**
  * Entité joueur
@@ -14,6 +15,7 @@ export class Player {
     private debugDot?: Phaser.GameObjects.Arc; // Point de debug
     private gridX: number;
     private gridY: number;
+    private nameText: Phaser.GameObjects.Text;
 
     constructor(scene: Phaser.Scene, x: number, y: number, originX: number, originY: number) {
         this.scene = scene;
@@ -54,6 +56,19 @@ export class Player {
         this.light.setDepth(pos.y + 1);
         this.light.setScale(0.8); // Plus petit que le feu
         this.light.setAlpha(0);
+
+        // Nom du joueur local
+        const playerStore = usePlayerStore();
+        this.nameText = scene.add.text(pos.x, pos.y - 60, playerStore.username, {
+            fontFamily: 'Arial',
+            fontSize: '14px',
+            color: '#fbbf24', // Amber
+            stroke: '#000000',
+            strokeThickness: 4,
+            shadow: { offsetX: 1, offsetY: 1, color: '#000000', blur: 2, stroke: true, fill: true }
+        });
+        this.nameText.setOrigin(0.5, 0.5);
+        this.nameText.setDepth(999999);
     }
 
     /**
@@ -96,6 +111,10 @@ export class Player {
         if (this.light) {
             this.light.setPosition(this.sprite.x, this.sprite.y - 32);
             this.light.setDepth(this.sprite.y + 1);
+        }
+
+        if (this.nameText) {
+            this.nameText.setPosition(this.sprite.x, this.sprite.y - 60);
         }
 
         // Update Depth
@@ -167,6 +186,10 @@ export class Player {
                     this.light.setDepth(this.sprite.y + 1);
                 }
 
+                if (this.nameText) {
+                    this.nameText.setPosition(this.sprite.x, this.sprite.y - 60);
+                }
+
                 // Sync Debug Dot (Doit rester au "sol" théorique)
                 // Attention: this.sprite.y contient l'offsetY et PLAYER_VISUAL_OFFSET_Y. 
                 // Si on veut afficher le pivot, il faut soustraire l'offset total.
@@ -186,6 +209,7 @@ export class Player {
      */
     destroy(): void {
         if (this.light) this.light.destroy();
+        if (this.nameText) this.nameText.destroy();
         this.sprite.destroy();
     }
 }

@@ -288,11 +288,12 @@ export class MainScene extends Scene {
                 // Le serveur envoie maintenant msg.x et msg.y en coordonnées GRILLE.
                 const spawnGridX = msg.x !== undefined ? msg.x : 10;
                 const spawnGridY = msg.y !== undefined ? msg.y : 10;
+                const pUsername = msg.username || "Inconnu";
 
-                this.worldStore.addOtherPlayer(msg.id, spawnGridX, spawnGridY);
+                this.worldStore.addOtherPlayer(msg.id, spawnGridX, spawnGridY, pUsername);
 
                 const isoPos = IsoMath.gridToIso(spawnGridX, spawnGridY, this.mapOriginX, this.mapOriginY);
-                this.objectManager.addRemotePlayer(msg.id, isoPos.x, isoPos.y);
+                this.objectManager.addRemotePlayer(msg.id, isoPos.x, isoPos.y, pUsername);
 
                 this.showFloatingText(isoPos.x, isoPos.y - 120, "Un joueur arrive !", "#ffffff");
             }
@@ -306,7 +307,7 @@ export class MainScene extends Scene {
                 if (msg.players && Array.isArray(msg.players)) {
                     this.worldStore.setOtherPlayers(msg.players);
                     msg.players.forEach((playerObj: any) => {
-                        // Le backend envoie maintenant des objets avec {id, x, y}
+                        // Le backend envoie maintenant des objets avec {id, x, y, username}
                         const pId = typeof playerObj === 'string' ? playerObj : playerObj.id;
 
                         // Sécurité : Ne pas instancier le sprite du joueur local
@@ -315,9 +316,10 @@ export class MainScene extends Scene {
 
                         const pX = typeof playerObj === 'string' ? 10 : (playerObj.x !== undefined ? playerObj.x : 10);
                         const pY = typeof playerObj === 'string' ? 10 : (playerObj.y !== undefined ? playerObj.y : 10);
+                        const pUsername = typeof playerObj === 'string' ? "Inconnu" : (playerObj.username || "Inconnu");
 
                         const isoPos = IsoMath.gridToIso(pX, pY, this.mapOriginX, this.mapOriginY);
-                        this.objectManager.addRemotePlayer(pId, isoPos.x, isoPos.y);
+                        this.objectManager.addRemotePlayer(pId, isoPos.x, isoPos.y, pUsername);
                     });
                 }
             }

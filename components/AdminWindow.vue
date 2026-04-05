@@ -22,8 +22,8 @@ const regenerateMap = () => {
 </script>
 
 <template>
-  <div class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all z-50 transform origin-center" @click.self="$emit('close')">
-    <div class="relative w-[500px] h-[600px] rounded-3xl border border-rose-500/30 bg-slate-900/90 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20 flex flex-col gap-4">
+  <div class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all z-50 transform origin-center" @click.self="$emit('close')" @pointerdown.self.stop @mousedown.self.stop @touchstart.self.stop>
+    <div class="relative w-[500px] h-[600px] rounded-3xl border border-rose-500/30 bg-slate-900/90 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20 flex flex-col gap-4" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
       
       <!-- HEADER -->
       <div class="flex items-center justify-between border-b border-rose-500/20 pb-4">

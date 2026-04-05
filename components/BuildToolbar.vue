@@ -34,7 +34,7 @@ const getCount = (itemName: string) => {
 </script>
 
 <template>
-  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-stone-900/90 border border-stone-700 rounded-xl p-2 flex items-center gap-2 shadow-xl backdrop-blur-sm z-10 pointer-events-auto" @click.stop @mousedown.stop @touchstart.stop>
+  <div class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-stone-900/90 border border-stone-700 rounded-xl p-2 flex items-center gap-2 shadow-xl backdrop-blur-sm z-10 pointer-events-auto" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
 
     <div 
         v-for="(itemName, idx) in player.hotbar" 

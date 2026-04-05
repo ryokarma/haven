@@ -88,7 +88,7 @@ class ConnectionManager:
         for cid, info in self.active_sessions.items():
             if cid != client_id and info["map_id"] == current_map:
                 u = userManager.get_or_create_user(cid)
-                current_players_data.append({"id": cid, "x": u.get("x", 10), "y": u.get("y", 10)})
+                current_players_data.append({"id": cid, "x": u.get("x", 10), "y": u.get("y", 10), "username": u.get("username", "Inconnu")})
         
         await websocket.send_text(json.dumps({
             "type": "CURRENT_PLAYERS",
@@ -100,7 +100,8 @@ class ConnectionManager:
             "type": "PLAYER_JOINED",
             "id": client_id,
             "x": joined_user.get("x", 10),
-            "y": joined_user.get("y", 10)
+            "y": joined_user.get("y", 10),
+            "username": joined_user.get("username", "Inconnu")
         }), map_id=current_map, exclude_id=client_id)
 
     def disconnect(self, client_id: str):
@@ -477,7 +478,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 for cid, info in manager.active_sessions.items():
                     if cid != client_id and info["map_id"] == current_map:
                         user = userManager.get_or_create_user(cid)
-                        current_players_data.append({"id": cid, "x": user.get("x", 10), "y": user.get("y", 10)})
+                        current_players_data.append({"id": cid, "x": user.get("x", 10), "y": user.get("y", 10), "username": user.get("username", "Inconnu")})
                 
                 await manager.send_to(client_id, make_msg(
                     "CURRENT_PLAYERS",

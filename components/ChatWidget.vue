@@ -55,11 +55,11 @@ const formatTime = (ts: number | undefined) => {
 </script>
 
 <template>
-  <div class="pointer-events-auto absolute bottom-32 left-4 z-40 flex flex-col gap-2 w-80 max-h-[400px]" @click.stop @mousedown.stop @touchstart.stop>
+  <div class="pointer-events-auto absolute bottom-32 left-4 z-40 flex flex-col gap-2 w-80 max-h-[500px]" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
     <!-- Messages List -->
     <div 
         ref="messagesContainer"
-        class="flex flex-col gap-1 overflow-y-auto max-h-64 p-3 rounded-lg bg-stone-900/40 backdrop-blur-sm transition-all hover:bg-stone-900/60 border border-stone-100/10 shadow-lg no-scrollbar"
+        class="flex flex-col gap-1 overflow-y-auto max-h-96 p-3 rounded-lg bg-stone-900/40 backdrop-blur-sm transition-all hover:bg-stone-900/60 border border-stone-100/10 shadow-lg no-scrollbar"
         :class="{ 'opacity-60 hover:opacity-100': !isFocused, 'opacity-100': isFocused }"
     >
         <div v-for="(msg, idx) in chatStore.messages" :key="idx" class="text-sm shadow-black drop-shadow-md break-words animate-slide-in leading-tight">
