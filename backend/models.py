@@ -70,6 +70,8 @@ class User(Base):
     password_hash = Column(String, nullable=True)     # Hachage du mot de passe
     role = Column(String, default="user")             # Rôle utilisateur
     created_at = Column(DateTime, default=datetime.utcnow) # Date de création
+    job = Column(String, default="")                  # Métier (RP)
+    description = Column(String, default="")          # Description/Bio (RP)
     position_x = Column(Float, default=10.0)          # X grille isométrique
     position_y = Column(Float, default=10.0)          # Y grille isométrique
     map_id = Column(String, default="main")           # Carte courante (ex: surface, cave)

@@ -22,6 +22,8 @@ from fastapi import Query, HTTPException, status
 import uuid
 from sqlalchemy.future import select
 from sqlalchemy import text
+from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel
 
 # ──────────────────────────────────────────────
 # 1. Application & CORS
@@ -43,6 +45,14 @@ async def startup():
             pass
         try:
             await conn.execute(text("ALTER TABLE users ADD COLUMN created_at DATETIME"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN job VARCHAR DEFAULT ''"))
+        except Exception:
+            pass
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN description VARCHAR DEFAULT ''"))
         except Exception:
             pass
     print("[DB] Tables SQLite créées ou vérifiées et colonnes migrées.")
@@ -201,6 +211,46 @@ async def login(req: backend.models.LoginRequest, db: AsyncSession = Depends(get
     
     token = create_access_token({"sub": user.id, "username": user.username, "role": user.role})
     return {"access_token": token, "token_type": "bearer", "player_id": user.id, "username": user.username, "role": user.role}
+
+
+# ──────────────────────────────────────────────
+# 5.5 API REST — Profil (Roleplay)
+# ──────────────────────────────────────────────
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+async def get_current_user_id(token: str = Depends(oauth2_scheme)):
+    payload = decode_access_token(token)
+    if not payload or not payload.get("sub"):
+        raise HTTPException(status_code=401, detail="Token invalide")
+    return payload["sub"]
+
+@app.get("/api/profile/{player_id}")
+async def get_profile(player_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(backend.models.User).where(backend.models.User.id == player_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Joueur introuvable")
+    return {
+        "username": user.username,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "job": user.job or "",
+        "description": user.description or ""
+    }
+
+class ProfileUpdate(BaseModel):
+    job: str
+    description: str
+
+@app.put("/api/profile")
+async def update_profile(profile: ProfileUpdate, user_id: str = Depends(get_current_user_id), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(backend.models.User).where(backend.models.User.id == user_id))
+    user = result.scalars().first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Joueur introuvable")
+    user.job = profile.job
+    user.description = profile.description
+    await db.commit()
+    return {"message": "Profil mis à jour", "job": user.job, "description": user.description}
 
 # ──────────────────────────────────────────────
 # 6. WebSocket Endpoint

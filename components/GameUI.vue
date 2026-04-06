@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { usePlayerStore } from '@/stores/player';
 import { useWorldStore } from '@/stores/world';
 import { useNetworkStore } from '@/stores/network';
@@ -7,6 +7,7 @@ import CraftingWindow from './CraftingWindow.vue';
 import CharacterWindow from './CharacterWindow.vue';
 import AdminWindow from './AdminWindow.vue';
 import PlayerListWidget from './PlayerListWidget.vue';
+import ProfileWindow from './ProfileWindow.vue';
 
 const player = usePlayerStore();
 const world = useWorldStore();
@@ -15,6 +16,30 @@ const isInventoryOpen = ref(false);
 const isCraftingOpen = ref(false);
 const isCharacterOpen = ref(false);
 const isAdminOpen = ref(false);
+const isProfileOpen = ref(false);
+const inspectedPlayerId = ref<string | null>(null);
+
+function openProfile(playerId: string | null = null) {
+    inspectedPlayerId.value = playerId;
+    isProfileOpen.value = true;
+}
+
+const handleInspectEvent = (e: Event) => {
+    const customEvent = e as CustomEvent;
+    if (customEvent.detail && customEvent.detail.playerId) {
+        openProfile(customEvent.detail.playerId);
+    }
+};
+
+
+
+onMounted(() => {
+    window.addEventListener('inspectPlayerProfile', handleInspectEvent);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('inspectPlayerProfile', handleInspectEvent);
+});
 
 
 
@@ -198,6 +223,12 @@ watch(() => player.lastActionFeedback, (newVal) => {
         @close="isAdminOpen = false" 
     />
 
+    <ProfileWindow 
+        v-if="isProfileOpen" 
+        :player-id="inspectedPlayerId || undefined"
+        @close="isProfileOpen = false" 
+    />
+
     <div class="absolute bottom-4 right-4 pointer-events-auto flex items-center gap-3 z-10" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
           <!-- Bouton Crafting -->
           <button 
@@ -229,6 +260,17 @@ watch(() => player.lastActionFeedback, (newVal) => {
              <div class="relative">
                  <!-- Icone simple pour le personnage -->
                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+             </div>
+          </button>
+
+          <!-- Bouton Profil (Nouveau) -->
+          <button 
+            @click="openProfile(null)" 
+            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
+            title="Profil RP"
+          >
+             <div class="relative">
+                 <span class="text-2xl drop-shadow-md">📜</span>
              </div>
           </button>
 

@@ -408,6 +408,14 @@ export class ObjectManager {
         // Z-Sorting dynamique respectant les assets du monde
         playerSprite.setDepth(actualY + (x * 0.001));
 
+        // Interactivité pour l'inspection de profil
+        playerSprite.setInteractive({ cursor: 'pointer' });
+        playerSprite.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.leftButtonReleased() || pointer.leftButtonDown()) {
+                window.dispatchEvent(new CustomEvent('inspectPlayerProfile', { detail: { playerId: id } }));
+            }
+        });
+
         // Ajout d'un texte flottant avec l'ID du joueur, pour le différencier
         const displayedName = username || `Joueur ${id.substring(0, 8)}`;
         const nameText = this.scene.add.text(x, actualY - 60, displayedName, {
@@ -420,6 +428,15 @@ export class ObjectManager {
         });
         nameText.setOrigin(0.5, 0.5);
         nameText.setDepth(999999);
+        
+        // Interactivité pour le pseudo aussi
+        nameText.setInteractive({ cursor: 'pointer' });
+        nameText.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            if (pointer.leftButtonReleased() || pointer.leftButtonDown()) {
+                window.dispatchEvent(new CustomEvent('inspectPlayerProfile', { detail: { playerId: id } }));
+            }
+        });
+
         playerSprite.setData('nameText', nameText);
 
         this.remotePlayers.set(id, playerSprite);
