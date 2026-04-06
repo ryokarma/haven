@@ -19,11 +19,11 @@ const onlineCount = computed(() => {
     <!-- Toggle Button -->
     <button 
         @click="isOpen = !isOpen"
-        class="flex items-center gap-2 bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-amber-100 px-3 py-1.5 rounded-lg shadow-lg backdrop-blur-sm transition-all shadow-black/50"
+        class="flex min-h-[44px] min-w-[44px] items-center justify-center gap-2 bg-slate-900/80 hover:bg-slate-800 border border-white/10 text-amber-100 p-2 md:px-3 md:py-1.5 rounded-lg shadow-lg backdrop-blur-sm transition-all shadow-black/50"
     >
-        <span class="text-sm">👥</span>
-        <span class="font-bold text-sm">{{ onlineCount }} en ligne</span>
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="transition-transform duration-200" :class="{ 'rotate-180': isOpen }"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        <span class="text-sm md:text-base">👥</span>
+        <span class="font-bold text-sm hidden md:inline">{{ onlineCount }} en ligne</span>
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="hidden md:block transition-transform duration-200" :class="{ 'rotate-180': isOpen }"><polyline points="6 9 12 15 18 9"></polyline></svg>
     </button>
 
     <!-- Dropdown List -->

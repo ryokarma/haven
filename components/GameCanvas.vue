@@ -1,5 +1,5 @@
 <template>
-  <div id="phaser-game" class="w-full h-[80vh] rounded-xl overflow-hidden shadow-2xl border-4 border-slate-700 bg-slate-900 relative z-0">
+  <div id="phaser-game" class="w-full h-full flex-1 md:h-[80vh] md:flex-none rounded-none md:rounded-xl overflow-hidden shadow-none md:shadow-2xl border-none md:border-4 border-slate-700 bg-slate-900 relative z-0">
     </div>
 </template>
 

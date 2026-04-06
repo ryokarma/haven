@@ -91,7 +91,7 @@ const formatDate = (dateStr: string) => {
             <h2 class="text-xl font-bold text-amber-100 flex items-center gap-2">
                 <span>{{ isReadOnly ? '👁️' : '📜' }}</span> {{ isReadOnly ? 'Inspection du Profil' : 'Profil Roleplay' }}
             </h2>
-            <button @click="$emit('close')" class="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 hover:bg-white/20 text-slate-400 hover:text-white transition-colors">
+            <button @click="$emit('close')" class="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/5 hover:bg-white/20 text-slate-400 hover:text-white transition-colors">
                 ✕
             </button>
         </div>
@@ -100,7 +100,7 @@ const formatDate = (dateStr: string) => {
             Chargement de l'histoire...
         </div>
         
-        <div v-else class="flex flex-col gap-4">
+        <div v-else class="flex flex-col gap-4 overflow-y-auto max-h-[60vh] md:max-h-[400px] pr-2 custom-scrollbar">
             <div v-if="error" class="rounded bg-red-900/50 p-2 text-sm text-red-200 border border-red-500/50">
                 {{ error }}
             </div>

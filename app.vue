@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-stone-900 flex flex-col items-center justify-center p-4">
+  <div class="h-[100dvh] w-full overflow-hidden touch-none select-none bg-stone-900 flex flex-col items-center justify-center p-0 md:p-4">
     
     <header class="mb-8 text-center">
       <h1 class="text-4xl font-bold text-amber-100 mb-2">Projet Haven</h1>
@@ -170,6 +170,10 @@ const handleAuth = async () => {
 /* Reset global basique */
 body {
   margin: 0;
+  padding: 0;
   background-color: #1c1917; /* stone-900 */
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
 }
 </style>

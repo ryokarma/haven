@@ -83,15 +83,15 @@ watch(() => player.lastActionFeedback, (newVal) => {
 </script>
 
 <template>
-  <div class="pointer-events-none absolute inset-0 flex flex-col justify-between p-6">
+  <div class="pointer-events-none absolute inset-0 flex flex-col justify-between p-2 md:p-6 text-sm md:text-base">
     
     <!-- PLAYER LIST WIDGET -->
     <PlayerListWidget />
     
-    <div class="pointer-events-auto flex items-center gap-4 animate-fade-in z-10 w-fit" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
-        <div class="relative group flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/20 bg-slate-900/60 backdrop-blur-md shadow-lg transition-transform hover:scale-105">
-            <img src="/assets/hero.png" class="h-12 w-12 object-contain" alt="Avatar" />
-            <div class="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-slate-900 border border-white/20 shadow-sm">
+    <div class="pointer-events-auto flex items-center gap-2 md:gap-4 animate-fade-in z-10 w-fit" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+        <div class="relative group flex h-12 w-12 md:h-16 md:w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/20 bg-slate-900/60 backdrop-blur-md shadow-lg transition-transform hover:scale-105">
+            <img src="/assets/hero.png" class="h-8 w-8 md:h-12 md:w-12 object-contain" alt="Avatar" />
+            <div class="absolute bottom-0 right-0 flex h-4 w-4 md:h-6 md:w-6 items-center justify-center rounded-full bg-amber-500 text-[8px] md:text-xs font-bold text-slate-900 border border-white/20 shadow-sm">
                 {{ player.level }}
             </div>
         </div>
@@ -155,13 +155,13 @@ watch(() => player.lastActionFeedback, (newVal) => {
 
 
 
-    <!-- WALLET DISPLAY (Coin supérieur gauche) -->
-    <div class="pointer-events-auto absolute top-4 left-4 z-10 flex flex-col gap-2" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
-        <div class="flex items-center gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-3 py-1.5 rounded-lg shadow-lg">
+    <!-- WALLET DISPLAY (Haut Centre) -->
+    <div class="pointer-events-auto absolute top-2 left-1/2 -translate-x-1/2 md:top-4 md:left-1/2 md:-translate-x-1/2 z-10 flex flex-row gap-2 scale-75 md:scale-100 origin-top" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+        <div class="flex items-center gap-1 md:gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-2 md:px-3 py-1 md:py-1.5 rounded-lg shadow-lg">
             <span v-html="icons.wood" class="text-amber-600 scale-75"></span>
             <span class="font-mono font-bold text-amber-100">{{ player.economyInventory.wood || 0 }}</span>
         </div>
-        <div class="flex items-center gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-3 py-1.5 rounded-lg shadow-lg">
+        <div class="flex items-center gap-1 md:gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-2 md:px-3 py-1 md:py-1.5 rounded-lg shadow-lg">
             <span v-html="icons.stone" class="text-stone-400 scale-75"></span>
             <span class="font-mono font-bold text-stone-200">{{ player.economyInventory.stone || 0 }}</span>
         </div>
@@ -170,38 +170,40 @@ watch(() => player.lastActionFeedback, (newVal) => {
     <div v-if="isInventoryOpen" class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all z-50" @click.self="isInventoryOpen = false" @pointerdown.self.stop @mousedown.self.stop @touchstart.self.stop>
       <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20 pointer-events-auto" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
         
-        <div class="mb-6 flex items-center justify-between border-b border-white/10 pb-4">
+        <div class="mb-4 flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
             <h2 class="flex items-center gap-2 text-xl font-bold text-amber-100">
                 <span v-html="icons.bag" class="text-amber-400"></span>
                 Sac à dos
             </h2>
-            <button @click="isInventoryOpen = false" class="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 hover:bg-white/20 text-slate-400 hover:text-white transition-colors">
+            <button @click="isInventoryOpen = false" class="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full bg-white/5 hover:bg-white/20 text-slate-400 hover:text-white transition-colors">
                 ✕
             </button>
         </div>
         
-        <div v-if="player.resourceInventory.length === 0" class="flex h-32 flex-col items-center justify-center text-slate-400 italic gap-2">
-            <span class="text-4xl opacity-20">🎒</span>
-            Vide... Récoltez des ressources !
-        </div>
-        
-        <div v-else class="grid grid-cols-4 gap-3">
-            <div v-for="(item, idx) in player.resourceInventory" :key="idx" 
-                 @click="handleItemClick(item.name)"
-                 @contextmenu.prevent="player.equipItem(item.name)"
-                 title="Clic: Utiliser/Équiper | Clic Droit: Équiper"
-                 class="group relative aspect-square flex flex-col items-center justify-center rounded-xl border border-white/5 bg-white/5 transition-all hover:bg-white/10 hover:border-amber-400/30 hover:scale-105 cursor-pointer active:scale-95">
-               
-               <span v-html="getIcon(item.name)" class="text-amber-200 mb-1 drop-shadow-lg"></span>
-               
-               <span class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-white border border-white/10 shadow-sm">
-                   {{ item.count }}
-               </span>
-               
-               <span class="text-[10px] text-slate-300 font-medium tracking-wide">{{ item.name }}</span>
-               
-               <!-- Indicateur de clic -->
-               <div class="absolute inset-0 rounded-xl bg-amber-400/0 group-hover:bg-amber-400/10 transition-colors pointer-events-none"></div>
+        <div class="overflow-y-auto max-h-[60vh] md:max-h-[400px] overflow-x-hidden custom-scrollbar pr-2">
+            <div v-if="player.resourceInventory.length === 0" class="flex h-32 flex-col items-center justify-center text-slate-400 italic gap-2">
+                <span class="text-4xl opacity-20">🎒</span>
+                Vide... Récoltez des ressources !
+            </div>
+            
+            <div v-else class="grid grid-cols-4 gap-3">
+                <div v-for="(item, idx) in player.resourceInventory" :key="idx" 
+                     @click="handleItemClick(item.name)"
+                     @contextmenu.prevent="player.equipItem(item.name)"
+                     title="Clic: Utiliser/Équiper | Clic Droit: Équiper"
+                     class="group relative min-h-[44px] min-w-[44px] aspect-square flex flex-col items-center justify-center rounded-xl border border-white/5 bg-white/5 transition-all hover:bg-white/10 hover:border-amber-400/30 hover:scale-105 cursor-pointer active:scale-95">
+                   
+                   <span v-html="getIcon(item.name)" class="text-amber-200 mb-1 drop-shadow-lg"></span>
+                   
+                   <span class="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-white border border-white/10 shadow-sm">
+                       {{ item.count }}
+                   </span>
+                   
+                   <span class="text-[10px] text-slate-300 font-medium tracking-wide">{{ item.name }}</span>
+                   
+                   <!-- Indicateur de clic -->
+                   <div class="absolute inset-0 rounded-xl bg-amber-400/0 group-hover:bg-amber-400/10 transition-colors pointer-events-none"></div>
+                </div>
             </div>
         </div>
 
@@ -229,35 +231,35 @@ watch(() => player.lastActionFeedback, (newVal) => {
         @close="isProfileOpen = false" 
     />
 
-    <div class="absolute bottom-4 right-4 pointer-events-auto flex items-center gap-3 z-10" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+    <div class="absolute bottom-2 left-1/2 -translate-x-1/2 md:bottom-4 md:right-4 md:left-auto md:-translate-x-0 w-[95%] md:w-auto flex items-center justify-center md:justify-end gap-2 md:gap-3 pointer-events-auto z-10" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
           <!-- Bouton Crafting -->
           <button 
             @click="isCraftingOpen = !isCraftingOpen" 
-            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
+            class="group flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
             title="Artisanat"
           >
-             <span v-html="icons.hammer"></span>
+             <span class="scale-[0.85] md:scale-100" v-html="icons.hammer"></span>
           </button>
 
           <!-- Bouton Admin (Caché si pas admin) -->
           <button 
             v-if="player.role === 'admin'"
             @click="isAdminOpen = !isAdminOpen"
-            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-rose-500/30 bg-rose-900/80 backdrop-blur-xl text-rose-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-rose-800 hover:border-rose-400/50 active:scale-95"
+            class="group flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl border border-rose-500/30 bg-rose-900/80 backdrop-blur-xl text-rose-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-rose-800 hover:border-rose-400/50 active:scale-95"
             title="Administration"
           >
-             <div class="relative">
-                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+             <div class="relative scale-[0.85] md:scale-100">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
              </div>
           </button>
 
           <!-- Bouton Personnage (Nouveau) -->
           <button 
             @click="isCharacterOpen = !isCharacterOpen" 
-            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
+            class="group flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
             title="Personnage"
           >
-             <div class="relative">
+             <div class="relative scale-[0.85] md:scale-100">
                  <!-- Icone simple pour le personnage -->
                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
              </div>
@@ -266,23 +268,23 @@ watch(() => player.lastActionFeedback, (newVal) => {
           <!-- Bouton Profil (Nouveau) -->
           <button 
             @click="openProfile(null)" 
-            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
+            class="group flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
             title="Profil RP"
           >
-             <div class="relative">
-                 <span class="text-2xl drop-shadow-md">📜</span>
+             <div class="relative scale-[0.85] md:scale-100">
+                 <span class="text-xl md:text-2xl drop-shadow-md">📜</span>
              </div>
           </button>
 
           <!-- Bouton Inventaire -->
           <button 
             @click="isInventoryOpen = !isInventoryOpen" 
-            class="group flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
+            class="group flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
             title="Ouvrir l'inventaire"
           >
-            <div class="relative">
+            <div class="relative scale-[0.85] md:scale-100">
                 <span v-html="icons.bag"></span>
-                <span v-if="player.resourceInventory.length > 0" class="absolute -top-2 -right-3 h-2 w-2 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]"></span>
+                <span v-if="player.resourceInventory.length > 0" class="absolute -top-1 -right-2 md:-top-2 md:-right-3 h-2 w-2 md:h-2.5 md:w-2.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)]"></span>
             </div>
           </button>
       </div>
