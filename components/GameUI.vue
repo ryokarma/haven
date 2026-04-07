@@ -18,6 +18,7 @@ const isCharacterOpen = ref(false);
 const isAdminOpen = ref(false);
 const isProfileOpen = ref(false);
 const inspectedPlayerId = ref<string | null>(null);
+const activeMobilePopup = ref<string | null>(null);
 
 function openProfile(playerId: string | null = null) {
     inspectedPlayerId.value = playerId;
@@ -88,86 +89,182 @@ watch(() => player.lastActionFeedback, (newVal) => {
     <!-- PLAYER LIST WIDGET -->
     <PlayerListWidget />
     
-    <div class="pointer-events-auto flex items-center gap-2 md:gap-4 animate-fade-in z-10 w-fit" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
-        <div class="relative group flex h-12 w-12 md:h-16 md:w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/20 bg-slate-900/60 backdrop-blur-md shadow-lg transition-transform hover:scale-105">
-            <img src="/assets/hero.png" class="h-8 w-8 md:h-12 md:w-12 object-contain" alt="Avatar" />
-            <div class="absolute bottom-0 right-0 flex h-4 w-4 md:h-6 md:w-6 items-center justify-center rounded-full bg-amber-500 text-[8px] md:text-xs font-bold text-slate-900 border border-white/20 shadow-sm">
-                {{ player.level }}
+    <div class="pointer-events-auto flex items-start z-10 w-fit relative" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+        
+        <!-- ============================== -->
+        <!-- PC ONLY: AVATAR & STATS COLUMN -->
+        <!-- ============================== -->
+        <div class="hidden md:flex items-center gap-4 animate-fade-in">
+            <div class="relative group flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-white/20 bg-slate-900/60 backdrop-blur-md shadow-lg transition-transform hover:scale-105">
+                <img src="/assets/hero.png" class="h-12 w-12 object-contain" alt="Avatar" />
+                <div class="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-500 text-xs font-bold text-slate-900 border border-white/20 shadow-sm">
+                    {{ player.level }}
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-1.5">
+                 <div class="flex items-center gap-2">
+                    <span class="font-serif text-xl font-bold text-white drop-shadow-md">{{ player.username }}</span>
+                 </div>
+                 
+                 <!-- Barres de stats -->
+                 <div class="flex flex-col gap-2 mt-2">
+                    <div v-for="(stat, key) in [
+                        { label: 'SANTÉ', value: player.stats.health, max: player.stats.maxHealth, color: 'bg-red-500', gradient: 'from-red-500 to-red-400' },
+                        { label: 'ÉNERGIE', value: player.stats.energy, max: player.stats.maxEnergy, color: 'bg-yellow-400', gradient: 'from-yellow-400 to-yellow-300' },
+                        { label: 'FAIM', value: player.stats.hunger, max: player.stats.maxHunger, color: 'bg-orange-500', gradient: 'from-orange-500 to-orange-400' },
+                        { label: 'SOIF', value: player.stats.thirst, max: player.stats.maxThirst, color: 'bg-cyan-400', gradient: 'from-cyan-400 to-cyan-300' }
+                    ]" :key="key" class="group relative flex items-center gap-3">
+                      
+                      <!-- Label -->
+                      <span class="text-[10px] font-bold text-white/80 w-12 tracking-wider">{{ stat.label }}</span>
+                      
+                      <!-- Barre Background -->
+                      <div class="relative w-32 h-2.5 bg-slate-900/60 rounded-full border border-white/10 overflow-hidden shadow-inner">
+                        <!-- Barre Remplissage -->
+                        <div 
+                          class="h-full bg-gradient-to-r transition-all duration-300 ease-out shadow-[0_0_10px_rgba(255,255,255,0.2)]"
+                          :class="stat.gradient"
+                          :style="{ width: `${(stat.value / stat.max) * 100}%` }"
+                        ></div>
+                      </div>
+
+                      <!-- Tooltip (au survol) -->
+                      <div class="absolute left-full ml-2 px-2 py-1 bg-black/80 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 backdrop-blur-sm border border-white/10">
+                        {{ Math.floor(stat.value) }} / {{ stat.max }}
+                      </div>
+                    </div>
+                 </div>
+
+                 <!-- Time Widget -->
+                 <div class="flex items-center gap-2 bg-slate-900/60 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full shadow-lg w-fit mt-1">
+                   <span class="text-xl animate-pulse">{{ world.isNight ? '🌙' : '☀️' }}</span>
+                   <span class="font-mono text-lg font-bold text-white tracking-widest drop-shadow-md">
+                     {{ world.formattedTime }}
+                   </span>
+                 </div>
+
+                 <div class="flex items-center gap-2 text-xs font-mono text-slate-300 bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm border border-white/5 w-fit">
+                    <span>X: {{ player.position.x }}</span>
+                    <span class="text-white/20">|</span>
+                    <span>Y: {{ player.position.y }}</span>
+                 </div>
             </div>
         </div>
 
-        <!-- FEEDBACK TOAST -->
-        <div v-if="feedbackMessage" class="absolute left-20 -top-8 pointer-events-none animate-slide-in">
-             <div class="bg-black/60 text-white text-sm px-3 py-1 rounded-full backdrop-blur-md border border-white/10 shadow-lg whitespace-nowrap">
-                 {{ feedbackMessage }}
-             </div>
+        <!-- ============================== -->
+        <!-- MOBILE ONLY: TOP ICONS BAR     -->
+        <!-- ============================== -->
+        <div class="md:hidden flex gap-3 animate-fade-in">
+            <!-- Stats/Profile Icon -->
+            <button @click="activeMobilePopup = activeMobilePopup === 'stats' ? null : 'stats'" 
+                    class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900/80 backdrop-blur-md border border-white/20 shadow-lg relative transition-all active:scale-95"
+                    :class="{'ring-2 ring-amber-400': activeMobilePopup === 'stats'}">
+                <img src="/assets/hero.png" class="h-8 w-8 object-contain" alt="Mobile Avatar" />
+                <div class="absolute bottom-0 right-0 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] font-bold text-slate-900 border border-white/20 shadow-sm">
+                    {{ player.level }}
+                </div>
+            </button>
+
+            <!-- World Icon -->
+            <button @click="activeMobilePopup = activeMobilePopup === 'world' ? null : 'world'"
+                    class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900/80 backdrop-blur-md border border-white/20 shadow-lg text-xl transition-all active:scale-95"
+                    :class="{'ring-2 ring-cyan-400 bg-slate-800': activeMobilePopup === 'world'}">
+                🌍
+            </button>
+
+            <!-- Players Icon -->
+            <button @click="activeMobilePopup = activeMobilePopup === 'players' ? null : 'players'"
+                    class="flex h-12 w-12 items-center justify-center rounded-full bg-slate-900/80 backdrop-blur-md border border-white/20 shadow-lg text-xl relative transition-all active:scale-95"
+                    :class="{'ring-2 ring-emerald-400 bg-slate-800': activeMobilePopup === 'players'}">
+                👥
+                <div class="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white border border-slate-900 shadow-sm">
+                    {{ Object.keys(world.otherPlayers).length + 1 }}
+                </div>
+            </button>
         </div>
 
-        <div class="flex flex-col gap-1.5">
-             <div class="flex items-center gap-2">
-                <span class="font-serif text-xl font-bold text-white drop-shadow-md">{{ player.username }}</span>
-             </div>
-             
-             <!-- Barres de stats -->
-             <div class="flex flex-col gap-2 mt-2">
+        <!-- ============================== -->
+        <!-- MOBILE ONLY: POPUP WINDOWS     -->
+        <!-- ============================== -->
+        <div v-if="activeMobilePopup" class="md:hidden absolute top-16 left-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 p-4 animate-fade-in-down origin-top-left pointer-events-auto">
+            
+            <!-- Stats Popup -->
+            <div v-if="activeMobilePopup === 'stats'" class="flex flex-col gap-3">
+                <div class="flex items-center justify-between mb-2 pb-2 border-b border-white/10">
+                    <span class="font-serif text-lg font-bold text-white">{{ player.username }}</span>
+                    <!-- Lien vers le vrai profil -->
+                    <button @click="openProfile(null); activeMobilePopup = null" class="text-xs bg-white/10 hover:bg-white/20 px-2 py-1 rounded text-white flex items-center gap-1 transition-colors">
+                        Profil 📜
+                    </button>
+                </div>
                 <div v-for="(stat, key) in [
                     { label: 'SANTÉ', value: player.stats.health, max: player.stats.maxHealth, color: 'bg-red-500', gradient: 'from-red-500 to-red-400' },
                     { label: 'ÉNERGIE', value: player.stats.energy, max: player.stats.maxEnergy, color: 'bg-yellow-400', gradient: 'from-yellow-400 to-yellow-300' },
                     { label: 'FAIM', value: player.stats.hunger, max: player.stats.maxHunger, color: 'bg-orange-500', gradient: 'from-orange-500 to-orange-400' },
                     { label: 'SOIF', value: player.stats.thirst, max: player.stats.maxThirst, color: 'bg-cyan-400', gradient: 'from-cyan-400 to-cyan-300' }
-                ]" :key="key" class="group relative flex items-center gap-3">
-                  
-                  <!-- Label -->
-                  <span class="text-[10px] font-bold text-white/80 w-12 tracking-wider">{{ stat.label }}</span>
-                  
-                  <!-- Barre Background -->
-                  <div class="relative w-32 h-2.5 bg-slate-900/60 rounded-full border border-white/10 overflow-hidden shadow-inner">
-                    <!-- Barre Remplissage -->
-                    <div 
-                      class="h-full bg-gradient-to-r transition-all duration-300 ease-out shadow-[0_0_10px_rgba(255,255,255,0.2)]"
-                      :class="stat.gradient"
-                      :style="{ width: `${(stat.value / stat.max) * 100}%` }"
-                    ></div>
-                  </div>
-
-                  <!-- Tooltip (au survol) -->
-                  <div class="absolute left-full ml-2 px-2 py-1 bg-black/80 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 backdrop-blur-sm border border-white/10">
-                    {{ Math.floor(stat.value) }} / {{ stat.max }}
-                  </div>
+                ]" :key="key" class="flex flex-col gap-1">
+                    <div class="flex justify-between text-[10px] font-bold text-white/80 tracking-wider">
+                        <span>{{ stat.label }}</span>
+                        <span>{{ Math.floor(stat.value) }} / {{ stat.max }}</span>
+                    </div>
+                    <div class="relative w-full h-2.5 bg-slate-900/60 rounded-full border border-white/10 overflow-hidden shadow-inner">
+                        <div class="h-full bg-gradient-to-r transition-all duration-300 ease-out"
+                            :class="stat.gradient" :style="{ width: `${(stat.value / stat.max) * 100}%` }"></div>
+                    </div>
                 </div>
-             </div>
+            </div>
 
-             <!-- Time Widget -->
-             <div class="flex items-center gap-2 bg-slate-900/60 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full shadow-lg w-fit">
-               <span class="text-xl animate-pulse">{{ world.isNight ? '🌙' : '☀️' }}</span>
-               <span class="font-mono text-lg font-bold text-white tracking-widest drop-shadow-md">
-                 {{ world.formattedTime }}
-               </span>
-             </div>
+            <!-- World Popup -->
+            <div v-if="activeMobilePopup === 'world'" class="flex flex-col gap-4">
+                <div class="flex items-center gap-3 justify-center py-2 bg-black/40 rounded-xl border border-white/5">
+                   <span class="text-2xl">{{ world.isNight ? '🌙' : '☀️' }}</span>
+                   <span class="font-mono text-xl font-bold text-white tracking-widest">{{ world.formattedTime }}</span>
+                </div>
+                <div class="flex items-center justify-center gap-2 text-sm font-mono text-slate-300 bg-black/40 px-3 py-1.5 rounded-xl border border-white/5">
+                    <span>X: {{ player.position.x }}</span>
+                    <span class="text-white/20">|</span>
+                    <span>Y: {{ player.position.y }}</span>
+                </div>
+            </div>
 
-             <div class="flex items-center gap-2 text-xs font-mono text-slate-300 bg-black/40 px-2 py-0.5 rounded-md backdrop-blur-sm border border-white/5 w-fit">
-                <span>X: {{ player.position.x }}</span>
-                <span class="text-white/20">|</span>
-                <span>Y: {{ player.position.y }}</span>
+            <!-- Players Popup -->
+            <div v-if="activeMobilePopup === 'players'" class="flex flex-col gap-2">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider text-center mb-2">Joueurs Connectés</div>
+                <div class="max-h-48 overflow-y-auto custom-scrollbar flex flex-col gap-1 pr-1">
+                    <!-- Local Player -->
+                    <div class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                        <div class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></div>
+                        <span class="text-sm font-bold text-amber-100 truncate flex-1">{{ player.username }}</span>
+                    </div>
+                    <!-- Other Players -->
+                    <div v-for="p in world.otherPlayers" :key="p.id" 
+                         @click="openProfile(p.id); activeMobilePopup = null"
+                         class="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-white/5 active:bg-white/10 transition-colors cursor-pointer">
+                        <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                        <span class="text-sm font-medium text-slate-200 truncate flex-1">{{ p.username || `Joueur ${p.id.substring(0, 4)}` }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FEEDBACK TOAST -->
+        <div v-if="feedbackMessage" class="absolute left-2 md:left-24 -bottom-10 md:top-0 pointer-events-none animate-slide-in z-[60]">
+             <div class="bg-black/60 text-white text-sm px-3 py-1 rounded-full backdrop-blur-md border border-white/10 shadow-lg whitespace-nowrap">
+                 {{ feedbackMessage }}
              </div>
         </div>
+
     </div>
 
 
 
-    <!-- WALLET DISPLAY (Haut Centre) -->
-    <div class="pointer-events-auto absolute top-2 left-1/2 -translate-x-1/2 md:top-4 md:left-1/2 md:-translate-x-1/2 z-10 flex flex-row gap-2 scale-75 md:scale-100 origin-top" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
-        <div class="flex items-center gap-1 md:gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-2 md:px-3 py-1 md:py-1.5 rounded-lg shadow-lg">
-            <span v-html="icons.wood" class="text-amber-600 scale-75"></span>
-            <span class="font-mono font-bold text-amber-100">{{ player.economyInventory.wood || 0 }}</span>
-        </div>
-        <div class="flex items-center gap-1 md:gap-2 bg-slate-900/80 backdrop-blur border border-white/10 px-2 md:px-3 py-1 md:py-1.5 rounded-lg shadow-lg">
-            <span v-html="icons.stone" class="text-stone-400 scale-75"></span>
-            <span class="font-mono font-bold text-stone-200">{{ player.economyInventory.stone || 0 }}</span>
-        </div>
-    </div>
+    <!-- WALLET DISPLAY DELETED IN REFONTE -->
 
-    <div v-if="isInventoryOpen" class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all z-50" @click.self="isInventoryOpen = false" @pointerdown.self.stop @mousedown.self.stop @touchstart.self.stop>
+    <!-- ============================== -->
+    <!-- PC ONLY: INVENTAIRE MODAL      -->
+    <!-- ============================== -->
+    <div v-if="isInventoryOpen" class="pointer-events-auto absolute inset-0 hidden md:flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all z-50" @click.self="isInventoryOpen = false" @pointerdown.self.stop @mousedown.self.stop @touchstart.self.stop>
       <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20 pointer-events-auto" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
         
         <div class="mb-4 flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
@@ -231,7 +328,10 @@ watch(() => player.lastActionFeedback, (newVal) => {
         @close="isProfileOpen = false" 
     />
 
-    <div class="absolute bottom-2 left-1/2 -translate-x-1/2 md:bottom-4 md:right-4 md:left-auto md:-translate-x-0 w-[95%] md:w-auto flex items-center justify-center md:justify-end gap-2 md:gap-3 pointer-events-auto z-10" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+    <!-- ============================== -->
+    <!-- PC ONLY: BOTTOM ACTION BAR     -->
+    <!-- ============================== -->
+    <div class="absolute bottom-4 right-4 hidden md:flex items-center justify-end gap-3 pointer-events-auto z-10" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
           <!-- Bouton Crafting -->
           <button 
             @click="isCraftingOpen = !isCraftingOpen" 
@@ -288,6 +388,95 @@ watch(() => player.lastActionFeedback, (newVal) => {
             </div>
           </button>
       </div>
+
+    <!-- ============================== -->
+    <!-- MOBILE ONLY: BOTTOM BAR ICONS  -->
+    <!-- ============================== -->
+    <div class="md:hidden absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl border border-white/15 px-6 py-3 rounded-[2rem] shadow-2xl z-40 pointer-events-auto" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+        
+        <!-- Inventory (Resources) -->
+        <button @click="activeMobilePopup = activeMobilePopup === 'inventory' ? null : 'inventory'" 
+                class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 border border-white/10 active:scale-95 transition-all text-2xl relative"
+                :class="{'bg-amber-500/20 border-amber-500/50': activeMobilePopup === 'inventory'}">
+            🎒
+            <span v-if="player.resourceInventory.length > 0" class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.8)] border border-slate-900"></span>
+        </button>
+
+        <!-- Tools (Equipment) -->
+        <button @click="activeMobilePopup = activeMobilePopup === 'tools' ? null : 'tools'" 
+                class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 border border-white/10 active:scale-95 transition-all text-2xl relative"
+                :class="{'bg-blue-500/20 border-blue-500/50': activeMobilePopup === 'tools'}">
+            🪓
+            <span v-if="player.toolInventory.length > 0" class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] border border-slate-900"></span>
+        </button>
+
+        <!-- Crafting (Ouvre CraftingWindow) -->
+        <button @click="isCraftingOpen = true; activeMobilePopup = null" 
+                class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 border border-white/10 active:scale-95 transition-all text-2xl">
+            🔨
+        </button>
+    </div>
+
+    <!-- ============================== -->
+    <!-- MOBILE ONLY: BOTTOM POPUPS     -->
+    <!-- ============================== -->
+    <div v-if="activeMobilePopup === 'inventory' || activeMobilePopup === 'tools'" 
+         class="md:hidden absolute bottom-24 left-3 right-3 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-3xl shadow-2xl z-50 p-5 pointer-events-auto flex flex-col" 
+         style="max-height: 50vh;" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+        
+        <!-- Bouton Fermer -->
+        <button @click="activeMobilePopup = null" class="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300 hover:text-white transition-colors active:scale-95 z-10">
+            ✕
+        </button>
+
+        <!-- Inventory (Ressources) Popup -->
+        <div v-if="activeMobilePopup === 'inventory'" class="flex flex-col h-full overflow-hidden">
+            <h2 class="text-xl font-bold text-amber-100 flex items-center gap-2 mb-4 shrink-0">
+                <span v-html="icons.bag" class="text-amber-400"></span> Sac à dos
+            </h2>
+            <div class="overflow-y-auto custom-scrollbar flex-1 pr-2">
+                <div v-if="player.resourceInventory.length === 0" class="flex flex-col items-center justify-center text-slate-400 h-24 italic">
+                    <span class="text-3xl opacity-30">🎒</span>
+                    Vide...
+                </div>
+                <div v-else class="grid grid-cols-4 gap-3">
+                    <div v-for="(item, idx) in player.resourceInventory" :key="'res-'+idx" 
+                         @click="handleItemClick(item.name)"
+                         class="group relative aspect-square flex flex-col items-center justify-center rounded-[1rem] border border-white/5 bg-black/40 active:bg-white/10 active:border-amber-400/30 transition-all active:scale-95">
+                        <span v-html="getIcon(item.name)" class="text-amber-200 mb-1 drop-shadow-md"></span>
+                        <span class="text-[10px] text-slate-300 font-medium truncate w-full text-center px-1">{{ item.name }}</span>
+                        <div class="absolute top-0 right-0 transform translate-x-1/4 -translate-y-1/4 bg-slate-800 text-[10px] font-bold text-white px-1.5 rounded-full border border-white/20 shadow-sm">
+                            {{ item.count }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools (Outils) Popup -->
+        <div v-if="activeMobilePopup === 'tools'" class="flex flex-col h-full overflow-hidden">
+            <h2 class="text-xl font-bold text-blue-200 flex items-center gap-2 mb-4 shrink-0">
+                <span class="text-blue-400">🪓</span> Outils & Équipement
+            </h2>
+            <div class="overflow-y-auto custom-scrollbar flex-1 pr-2">
+                <div v-if="player.toolInventory.length === 0" class="flex flex-col items-center justify-center text-slate-400 h-24 italic">
+                     Aucun équipement...
+                </div>
+                <div v-else class="grid grid-cols-4 gap-3">
+                    <div v-for="(tool, idx) in player.toolInventory" :key="'tool-'+idx" 
+                         @click="player.equipItem(tool.name); activeMobilePopup = null"
+                         class="group relative aspect-square flex flex-col items-center justify-center rounded-[1rem] border border-white/5 bg-black/40 active:bg-blue-500/20 active:border-blue-400/30 transition-all active:scale-95">
+                        <span class="text-2xl mb-1 drop-shadow-md">🛠️</span>
+                        <span class="text-[10px] text-slate-300 font-medium truncate w-full text-center px-1">{{ tool.name }}</span>
+                        <div class="absolute top-0 right-0 transform translate-x-1/4 -translate-y-1/4 bg-slate-800 text-[10px] font-bold text-white px-1.5 rounded-full border border-white/20 shadow-sm">
+                            {{ tool.count }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
 
     </div>
 </template>

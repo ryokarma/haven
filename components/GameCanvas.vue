@@ -1,6 +1,6 @@
 <template>
-  <div id="phaser-game" class="w-full h-full flex-1 md:h-[80vh] md:flex-none rounded-none md:rounded-xl overflow-hidden shadow-none md:shadow-2xl border-none md:border-4 border-slate-700 bg-slate-900 relative z-0">
-    </div>
+  <div id="phaser-game" @pointerdown="handleCanvasClick" @touchstart="handleCanvasClick" class="w-full h-full flex-1 md:h-[80vh] md:flex-none rounded-none md:rounded-xl overflow-hidden shadow-none md:shadow-2xl border-none md:border-4 border-slate-700 bg-slate-900 relative z-0">
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -11,6 +11,12 @@ import { MainScene } from '@/game/scenes/MainScene';
 import { usePlayerStore } from '@/stores/player';
 import { IsoMath } from '@/game/utils/IsoMath';
 import { GameConfig } from '@/game/config/GameConfig';
+
+const handleCanvasClick = () => {
+    if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+    }
+};
 
 let game: Phaser.Game | null = null;
 const player = usePlayerStore();
