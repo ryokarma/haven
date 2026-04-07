@@ -270,14 +270,15 @@
     },
     "daa3282c-4423-4dd1-8f3d-ba792e3a5180": {
         "id": "daa3282c-4423-4dd1-8f3d-ba792e3a5180",
-        "x": 42,
-        "y": 12,
+        "x": 16,
+        "y": 3,
         "wallet": {
             "wood": 11,
             "stone": 0,
             "apple": 11,
-            "cotton_plant": 1
+            "cotton_plant": 2
         },
-        "map_id": "farm_main"
+        "map_id": "farm_main",
+        "username": "ryoka"
     }
 }

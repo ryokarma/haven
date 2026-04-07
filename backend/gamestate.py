@@ -188,8 +188,15 @@ class GameState:
         
         self.maps["farm_main"] = generate_room_state("farm_main", WORLD_SEED)
         self.maps["housing_hub_1"] = generate_room_state("housing_hub_1", WORLD_SEED)
+        self.game_time = 480 # 08:00 AM in-game time
         
-
+    def tick_time(self, amount: int = 10) -> int:
+        self.game_time += amount
+        if self.game_time >= 1440:
+            self.game_time = self.game_time % 1440
+        return self.game_time
+        
+        
         
     def save_world(self):
         """[WIP] Legacy save not fully supported with Multi-Map yet."""

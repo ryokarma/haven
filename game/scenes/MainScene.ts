@@ -257,14 +257,9 @@ export class MainScene extends Scene {
             loop: true
         });
 
-        // Timer pour l'heure du monde (10 minutes toutes les 1s)
-        this.worldTimer = this.time.addEvent({
-            delay: 1000,
-            callback: () => {
-                this.worldStore.tickTime(10);
-            },
-            loop: true
-        });
+        // Le timer de l'heure du monde (worldTimer) a été supprimé.
+        // C'est maintenant le serveur qui dicte le temps via 'TIME_SYNC'
+
 
 
         // Notifier le store que le chargement est terminé pour enlever l'écran de chargement
@@ -361,6 +356,11 @@ export class MainScene extends Scene {
                     console.log(`[MainScene] WORLD_STATE appliqué : ${msg.payload.resources.length} objet(s) placé(s).`);
                 } else {
                     console.warn('[MainScene] WORLD_STATE/MAP_STATE reçu mais payload absent ou vide.', msg);
+                }
+            }
+            else if (msg.type === 'TIME_SYNC') {
+                if (msg.time !== undefined) {
+                    this.worldStore.time = msg.time;
                 }
             }
             else if (msg.type === 'MAP_REGENERATED') {

@@ -2,9 +2,11 @@
 import { ref, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { useChatStore } from '@/stores/chat';
 import { usePlayerStore } from '@/stores/player';
+import { useWorldStore } from '@/stores/world';
 
 const chatStore = useChatStore();
 const playerStore = usePlayerStore();
+const worldStore = useWorldStore();
 const inputMessage = ref('');
 const messagesContainer = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLInputElement | null>(null);
@@ -52,19 +54,26 @@ const formatTime = (ts: number | undefined) => {
     if (!ts) return "--:--";
     return new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 };
+
+const getSenderName = (msg: any) => {
+    if (msg.sender_name) return msg.sender_name;
+    const myId = localStorage.getItem('haven_player_id');
+    if (msg.sender === myId) return playerStore.username || 'Moi';
+    return worldStore.otherPlayers[msg.sender]?.username || msg.sender.slice(0, 5);
+};
 </script>
 
 <template>
-  <div class="pointer-events-auto absolute bottom-20 md:bottom-32 left-2 md:left-4 z-40 flex flex-col gap-1 md:gap-2 w-48 sm:w-64 md:w-80 max-h-40 md:max-h-[500px]" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+  <div class="pointer-events-auto absolute bottom-24 md:bottom-32 left-2 md:left-4 z-40 flex flex-col gap-1 md:gap-2 w-48 sm:w-64 md:w-80 max-h-36 md:max-h-[500px]" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
     <!-- Messages List -->
     <div 
         ref="messagesContainer"
-        class="flex flex-col gap-1 overflow-y-auto max-h-28 md:max-h-96 p-2 md:p-3 rounded-lg bg-stone-900/40 backdrop-blur-sm transition-all hover:bg-stone-900/60 border border-stone-100/10 shadow-lg no-scrollbar"
+        class="flex flex-col gap-1 overflow-y-auto max-h-[15vh] md:max-h-96 p-2 md:p-3 rounded-lg bg-stone-900/40 backdrop-blur-sm transition-all hover:bg-stone-900/60 border border-stone-100/10 shadow-lg no-scrollbar"
         :class="{ 'opacity-50 hover:opacity-100 md:opacity-60': !isFocused, 'opacity-100': isFocused }"
     >
         <div v-for="(msg, idx) in chatStore.messages" :key="idx" class="text-xs md:text-sm shadow-black drop-shadow-md break-words animate-slide-in leading-tight">
             <span class="text-stone-400 font-mono text-[8px] md:text-[10px] mr-1 align-baseline">[{{ formatTime(msg.timestamp) }}]</span>
-            <span class="font-bold text-amber-300 align-baseline" :title="msg.sender">{{ msg.sender.slice(0, 5) }}</span>
+            <span class="font-bold text-amber-300 align-baseline" :title="msg.sender">{{ getSenderName(msg) }}</span>
             <span class="text-stone-400 mx-0.5 md:mx-1 align-baseline">:</span>
             <span class="text-stone-100 align-baseline font-medium">{{ msg.text }}</span>
         </div>

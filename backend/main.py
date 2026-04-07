@@ -59,6 +59,18 @@ async def startup():
     
     # Démarrage de la tâche de fond pour le respawn
     asyncio.create_task(respawn_loop())
+    asyncio.create_task(time_sync_loop())
+
+async def time_sync_loop():
+    print("[TimeSync] Boucle de temps démarrée.")
+    while True:
+        await asyncio.sleep(1)
+        new_time = gameState.tick_time(10)
+        
+        # Broadcast the new time to all maps
+        msg = make_msg("TIME_SYNC", time=new_time)
+        for map_id in gameState.maps.keys():
+            await manager.broadcast(msg, map_id=map_id)
 
 async def respawn_loop():
     print("[Respawn] Boucle de respawn démarrée.")
@@ -267,11 +279,17 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
         await websocket.close(code=1008, reason="Token invalide ou ne correspond pas au client_id")
         return
         
+    # Synchronization du pseudonyme entre la BDD SQLite (JWT) et le InMemory JSON Users
+    u = userManager.get_or_create_user(client_id)
+    u["username"] = payload_token.get("username", "Inconnu")
+    userManager.save_users()
+
     await manager.connect(websocket, client_id)
 
     # ── A. Synchro Joueur ──
     user_data = userManager.get_or_create_user(client_id)
     await websocket.send_text(make_msg("PLAYER_SYNC", payload=user_data))
+    await websocket.send_text(make_msg("TIME_SYNC", time=gameState.game_time))
 
     # ── B. Synchro Monde ──
     # NOTE (Session 8.3): On n'envoie plus WORLD_STATE ici automatiquement.
@@ -558,9 +576,11 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if not text:
                     continue
 
+                user = userManager.get_or_create_user(client_id)
                 await manager.broadcast(make_msg(
                     "CHAT_MESSAGE",
                     sender=client_id,
+                    sender_name=user.get("username", "Inconnu"),
                     text=text,
                     timestamp=time.time()
                 ), map_id=current_map)

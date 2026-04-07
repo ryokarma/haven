@@ -1,7 +1,7 @@
 <template>
   <div class="h-[100dvh] w-full overflow-hidden touch-none select-none bg-stone-900 flex flex-col items-center justify-center p-0 md:p-4">
     
-    <header class="mb-8 text-center">
+    <header class="mb-8 text-center hidden md:block">
       <h1 class="text-4xl font-bold text-amber-100 mb-2">Projet Haven</h1>
       <p class="text-stone-400">Hub Social • Fantasy • Isométrique</p>
     </header>
