@@ -270,12 +270,12 @@
     },
     "daa3282c-4423-4dd1-8f3d-ba792e3a5180": {
         "id": "daa3282c-4423-4dd1-8f3d-ba792e3a5180",
-        "x": 16,
-        "y": 3,
+        "x": 34,
+        "y": 34,
         "wallet": {
             "wood": 11,
             "stone": 0,
-            "apple": 11,
+            "apple": 12,
             "cotton_plant": 2
         },
         "map_id": "farm_main",

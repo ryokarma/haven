@@ -63,7 +63,7 @@
     </template>
 
     <!-- Indicateur de status WebSocket -->
-    <div class="fixed bottom-4 right-4 flex items-center gap-2 px-3 py-1 bg-stone-800 rounded-full border border-stone-700 shadow-lg" v-if="isAuthenticated">
+    <div class="fixed bottom-4 right-4 flex items-center gap-2 px-3 py-1 bg-stone-800 rounded-full border border-stone-700 shadow-lg" v-if="isAuthenticated" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
       <div 
         class="w-3 h-3 rounded-full transition-colors duration-300" 
         :class="networkStore.isConnected ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-red-500'"

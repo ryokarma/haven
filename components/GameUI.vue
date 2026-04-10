@@ -187,7 +187,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
         <!-- ============================== -->
         <!-- MOBILE ONLY: POPUP WINDOWS     -->
         <!-- ============================== -->
-        <div v-if="activeMobilePopup" class="md:hidden absolute top-16 left-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 p-4 animate-fade-in-down origin-top-left pointer-events-auto">
+        <div v-if="activeMobilePopup" class="md:hidden absolute top-16 left-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 p-4 animate-fade-in-down origin-top-left pointer-events-auto" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
             
             <!-- Stats Popup -->
             <div v-if="activeMobilePopup === 'stats'" class="flex flex-col gap-3">
