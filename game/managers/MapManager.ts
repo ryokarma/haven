@@ -34,6 +34,17 @@ export class MapManager {
     }
 
     /**
+     * Adapte les variantes de tuiles selon le biome de la map active.
+     * Désert : sable (grass-*) + oasis teintées (water-*)
+     * Farm / Autres : herbe verte + eau bleue (comportement par défaut)
+     */
+    public setTileVariants(biome: string): void {
+        const isDesert = biome === 'desert';
+        this.tileManager.setBiome(biome);
+        console.log(`[MapManager] Biome set to: ${biome} (desert=${isDesert})`);
+    }
+
+    /**
      * Met à jour l'origine de la carte (pour le changement de map)
      */
     public setOrigin(originX: number, originY: number): void {
@@ -45,13 +56,29 @@ export class MapManager {
      * Nettoie toutes les tuiles isométriques du MapManager (Hotfix 16.2)
      */
     public clearMap(): void {
-        const tileGroup = this.tileManager.getTileGroup();
-        if (tileGroup) {
+        const tileGroup = this.tileManager?.getTileGroup ? this.tileManager.getTileGroup() : undefined;
+        if (tileGroup && tileGroup.getChildren) {
             // Destruction explicite "Bulldozer" pour s'assurer que les GameObjects disparaissent du displayList
-            tileGroup.getChildren().forEach(child => {
-                if (child.destroy) child.destroy(true); // true = removeFromScene
+            tileGroup.getChildren().forEach?.(child => {
+                if (child && child.destroy) child.destroy(true); // true = removeFromScene
             });
-            tileGroup.clear(true, true);
+            if (typeof tileGroup.clear === 'function') {
+                tileGroup.clear(true, true);
+            }
+        }
+        
+        if (this._gridData) {
+            this._gridData.length = 0;
+            // On conserve _gridData comme un tableau vide au lieu de null
+        }
+    }
+
+    /**
+     * Nettoie les tuiles occupées
+     */
+    public clearOccupied(): void {
+        if (this.occupiedTiles && typeof this.occupiedTiles.clear === 'function') {
+            this.occupiedTiles.clear();
         }
     }
 
@@ -79,6 +106,9 @@ export class MapManager {
         // Initialiser le bruit de Perlin
         const perlin = new Perlin(this.rnd);
 
+        // Adapter les tuiles au biome AVANT de placer les tuiles
+        this.setTileVariants(worldStore.mapId);
+
         // TODO: Pour des tailles de carte > 100x100, envisager le Chunking ou WebWorker pour éviter de bloquer le thread principal.
         this.initGrid();
 
@@ -90,6 +120,7 @@ export class MapManager {
 
         this.finalizeMap(isHousing);
     }
+
 
     /**
      * Initialise la grille avec des tuiles d'herbe par défaut

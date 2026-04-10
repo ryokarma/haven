@@ -265,24 +265,31 @@ export class ObjectManager {
     clearObjects(): void {
         if (this.objectMap) {
             this.objectMap.forEach(obj => {
-                const light = obj?.getData('light') as Phaser.GameObjects.Image | undefined;
-                if (light) light.destroy(true);
-                if (obj) obj.destroy(true);
+                if (obj && obj.active) {
+                    const light = obj.getData('light') as Phaser.GameObjects.Image | undefined;
+                    if (light && light.destroy) light.destroy(true);
+                    if (obj.destroy) obj.destroy(true);
+                }
             });
-            this.objectMap.clear();
+            if (typeof this.objectMap.clear === 'function') this.objectMap.clear();
+            (this as any).objectMap = null;
         }
 
         if (this.serverObjectMap) {
-            this.serverObjectMap.clear();
+            if (typeof this.serverObjectMap.clear === 'function') this.serverObjectMap.clear();
+            (this as any).serverObjectMap = null;
         }
 
         if (this.remotePlayers) {
             this.remotePlayers.forEach(p => {
-                const nameText = p?.getData('nameText') as Phaser.GameObjects.Text | undefined;
-                if (nameText) nameText.destroy(true);
-                if (p) p.destroy(true);
+                if (p && p.active) {
+                    const nameText = p.getData('nameText') as Phaser.GameObjects.Text | undefined;
+                    if (nameText && nameText.destroy) nameText.destroy(true);
+                    if (p.destroy) p.destroy(true);
+                }
             });
-            this.remotePlayers.clear();
+            if (typeof this.remotePlayers.clear === 'function') this.remotePlayers.clear();
+            (this as any).remotePlayers = null;
         }
 
         this.removedObjectIds = [];

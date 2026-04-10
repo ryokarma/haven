@@ -17,8 +17,20 @@ const isCraftingOpen = ref(false);
 const isCharacterOpen = ref(false);
 const isAdminOpen = ref(false);
 const isProfileOpen = ref(false);
+const isTravelOpen = ref(false);
 const inspectedPlayerId = ref<string | null>(null);
 const activeMobilePopup = ref<string | null>(null);
+
+// --- TRAVEL ---
+const availableMaps = [
+    { id: 'farm_main', name: '\uD83C\uDF3E Ferme Principale', description: 'Le point de départ. Forêts et prairies.' },
+    { id: 'desert', name: '\uD83C\uDFDC\uFE0F Désert Aride', description: 'Terres brûlées et ressources rares.' },
+];
+
+function handleTravel(mapId: string) {
+    isTravelOpen.value = false;
+    networkStore.sendTravelRequest(mapId);
+}
 
 function openProfile(playerId: string | null = null) {
     inspectedPlayerId.value = playerId;
@@ -332,9 +344,20 @@ watch(() => player.lastActionFeedback, (newVal) => {
     <!-- PC ONLY: BOTTOM ACTION BAR     -->
     <!-- ============================== -->
     <div class="absolute bottom-4 right-4 hidden md:flex items-center justify-end gap-3 pointer-events-auto z-10" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+          <!-- Bouton Voyager (Nouveau) -->
+          <button
+            @click="isTravelOpen = !isTravelOpen"
+            class="group flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl border border-cyan-500/30 bg-slate-800/80 backdrop-blur-xl text-cyan-200 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-cyan-400/50 active:scale-95"
+            title="Voyager"
+          >
+             <div class="relative scale-[0.85] md:scale-100">
+                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+             </div>
+          </button>
+
           <!-- Bouton Crafting -->
-          <button 
-            @click="isCraftingOpen = !isCraftingOpen" 
+          <button
+            @click="isCraftingOpen = !isCraftingOpen"
             class="group flex h-12 w-12 md:h-14 md:w-14 items-center justify-center rounded-xl md:rounded-2xl border border-white/10 bg-slate-800/80 backdrop-blur-xl text-amber-100 shadow-lg transition-all hover:-translate-y-1 hover:bg-slate-700 hover:border-amber-400/30 active:scale-95"
             title="Artisanat"
           >
@@ -410,6 +433,14 @@ watch(() => player.lastActionFeedback, (newVal) => {
             <span v-if="player.toolInventory.length > 0" class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.8)] border border-slate-900"></span>
         </button>
 
+        <!-- Voyage -->
+        <button @click="isTravelOpen = !isTravelOpen"
+                class="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-500/30 bg-slate-900/80 active:scale-95 transition-all text-xl"
+                :class="{'bg-cyan-500/20 border-cyan-500/50': isTravelOpen}"
+                title="Voyager">
+            🌍
+        </button>
+
         <!-- Crafting (Ouvre CraftingWindow) -->
         <button @click="isCraftingOpen = true; activeMobilePopup = null" 
                 class="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/5 border border-white/10 active:scale-95 transition-all text-2xl">
@@ -478,6 +509,72 @@ watch(() => player.lastActionFeedback, (newVal) => {
 
     </div>
 
+    <!-- ============================== -->
+    <!-- MODALE VOYAGE (PC + MOBILE)    -->
+    <!-- ============================== -->
+    <div
+        v-if="isTravelOpen"
+        class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50"
+        @click.self="isTravelOpen = false"
+        @pointerdown.self.stop @mousedown.self.stop @touchstart.self.stop
+    >
+        <div
+            class="relative w-full max-w-md mx-4 rounded-3xl border border-cyan-500/20 bg-slate-900/95 shadow-2xl backdrop-blur-xl p-6 animate-fade-in-down"
+            @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop
+        >
+            <!-- Header -->
+            <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/20 border border-cyan-500/30">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#67e8f9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Voyager</h2>
+                        <p class="text-xs text-slate-400">Map actuelle : <span class="text-cyan-300 font-mono">{{ world.mapId }}</span></p>
+                    </div>
+                </div>
+                <button @click="isTravelOpen = false" class="flex h-8 w-8 items-center justify-center rounded-full bg-white/5 hover:bg-white/15 text-slate-400 hover:text-white transition-colors">
+                    ✕
+                </button>
+            </div>
+
+            <!-- Liste des destinations -->
+            <div class="flex flex-col gap-3">
+                <div
+                    v-for="map in availableMaps"
+                    :key="map.id"
+                    @click="handleTravel(map.id)"
+                    class="group relative flex items-center gap-4 p-4 rounded-2xl border transition-all cursor-pointer"
+                    :class="[
+                        world.mapId === map.id
+                            ? 'border-cyan-400/50 bg-cyan-500/10 cursor-not-allowed opacity-60'
+                            : 'border-white/10 bg-white/5 hover:bg-cyan-500/10 hover:border-cyan-400/40 active:scale-[0.98]'
+                    ]"
+                >
+                    <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-800 text-2xl border border-white/10 shrink-0">
+                        {{ map.name.split(' ')[0] }}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="font-semibold text-white text-sm">{{ map.name.split(' ').slice(1).join(' ') }}</span>
+                            <span v-if="world.mapId === map.id" class="text-[10px] font-bold text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded-full border border-cyan-400/20">ACTUELLE</span>
+                        </div>
+                        <p class="text-xs text-slate-400 mt-0.5 truncate">{{ map.description }}</p>
+                        <p class="text-[10px] font-mono text-slate-500 mt-1">{{ map.id }}</p>
+                    </div>
+                    <div v-if="world.mapId !== map.id" class="text-cyan-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Note de bas de modale -->
+            <p class="text-center text-xs text-slate-500 mt-5">
+                Le voyage réinitialise la carte locale. Vos ressources sont conservées.
+            </p>
+        </div>
+    </div>
+
     </div>
 </template>
 
@@ -487,7 +584,9 @@ h1 { font-family: 'Merriweather', serif; }
 /* Animation subtile à l'apparition */
 .animate-fade-in { animation: fadeIn 0.5s ease-out; }
 .animate-slide-in { animation: slideIn 0.3s ease-out; }
+.animate-fade-in-down { animation: fadeInDown 0.25s ease-out; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes fadeInDown { from { opacity: 0; transform: translateY(-8px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
 </style>

@@ -3,6 +3,7 @@ import { ref, shallowRef } from 'vue';
 import { useRuntimeConfig } from '#imports';
 import { usePlayerStore } from './player';
 import { useChatStore } from './chat';
+import { useWorldStore } from './world';
 
 /**
  * Network Store — Gère la connexion WebSocket et le dispatch des messages
@@ -18,6 +19,7 @@ import { useChatStore } from './chat';
  * - WALLET_UPDATE
  * - RESOURCE_PLACED, RESOURCE_REMOVED
  * - CHAT_MESSAGE
+ * - MAP_CHANGED
  * - ERROR
  */
 export const useNetworkStore = defineStore('network', () => {
@@ -224,6 +226,12 @@ export const useNetworkStore = defineStore('network', () => {
         send('ACTION_PLACE', { x, y, itemId: item_id });
     }
 
+    // --- Travel ---
+    function sendTravelRequest(targetMapId: string) {
+        console.log(`[Network] → REQUEST_TRAVEL: target_map_id=${targetMapId}`);
+        send('REQUEST_TRAVEL', { target_map_id: targetMapId });
+    }
+
     // --- Admin ---
     function sendAdminKick(playerId: string) {
         console.log(`[Network] → ADMIN_KICK_PLAYER: target=${playerId}`);
@@ -280,6 +288,23 @@ export const useNetworkStore = defineStore('network', () => {
         });
     }
 
+    /**
+     * Écoute MAP_CHANGED — Déclenche le reset du worldStore avant la réception
+     * du nouveau WORLD_STATE suite à un voyage inter-cartes.
+     */
+    function listenForMapChange() {
+        const worldStore = useWorldStore();
+        onMessage((msg: any) => {
+            if (msg.type === 'MAP_CHANGED') {
+                const { map_id, map_width, map_height } = msg;
+                console.log(`[Network] ← MAP_CHANGED: nouvelle map = ${map_id}`);
+                // Réinitialise le worldStore : vide les objets/joueurs, met à jour les dimensions
+                worldStore.setMapInfo(map_id ?? 'farm_main', map_width ?? 100, map_height ?? 100);
+                worldStore.setMapLoaded(false);
+            }
+        });
+    }
+
     return {
         // State
         isConnected,
@@ -299,11 +324,13 @@ export const useNetworkStore = defineStore('network', () => {
         sendHarvest,
         sendCraft,
         sendPlace,
+        sendTravelRequest,
         sendAdminKick,
         sendAdminRegenerateMap,
         listenForEconomy,
         listenForChatMessages,
         listenForErrors,
+        listenForMapChange,
         onMessage,
         clearMessages
     };

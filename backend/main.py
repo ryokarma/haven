@@ -585,10 +585,73 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     timestamp=time.time()
                 ), map_id=current_map)
                 
-            # ──────────── ACTION_CHANGE_MAP ────────────
+            # ──────────── REQUEST_TRAVEL (Voyage inter-cartes) ────────────
+            elif msg_type == "REQUEST_TRAVEL":
+                target_map_id = payload.get("target_map_id", "farm_main")
+
+                # Validation : la map cible doit exister
+                valid_maps = list(gameState.maps.keys())
+                if target_map_id not in valid_maps:
+                    await websocket.send_text(make_msg("ERROR", message=f"Map inconnue : {target_map_id}"))
+                    continue
+
+                # Pas de voyage si déjà sur la map cible
+                if current_map == target_map_id:
+                    await websocket.send_text(make_msg("ERROR", message="Vous êtes déjà sur cette map."))
+                    continue
+
+                print(f"[WS] {client_id} voyage de {current_map} → {target_map_id}")
+
+                # 1. Notifier les joueurs de l'ancienne map du départ
+                await manager.broadcast(make_msg("PLAYER_LEFT", id=client_id), map_id=current_map, exclude_id=client_id)
+
+                # 2. Changer de room côté serveur
+                manager.set_player_map(client_id, target_map_id)
+
+                # 3. Persister la nouvelle map dans le UserManager
+                user_data_travel = userManager.get_or_create_user(client_id)
+                user_data_travel["map_id"] = target_map_id
+                # Spawn sûr sur la nouvelle map
+                safe_x, safe_y = gameState.get_safe_spawn(target_map_id)
+                userManager.update_user_position(client_id, safe_x, safe_y)
+
+                # 4. Envoyer MAP_CHANGED au client pour que le worldStore se réinitialise
+                map_info = gameState.get_map_info(target_map_id)
+                await websocket.send_text(make_msg(
+                    "MAP_CHANGED",
+                    map_id=target_map_id,
+                    map_width=map_info.get("width", 100),
+                    map_height=map_info.get("height", 100)
+                ))
+
+                # 5. Envoyer PLAYER_SYNC avec la nouvelle position
+                fresh_user = userManager.get_or_create_user(client_id)
+                await websocket.send_text(make_msg("PLAYER_SYNC", payload=fresh_user))
+
+                # 6. Envoyer le WORLD_STATE complet de la nouvelle map
+                new_world_state = gameState.get_full_state(target_map_id)
+                await websocket.send_text(make_msg("WORLD_STATE", payload=new_world_state))
+
+                # 7. Envoyer la liste des joueurs déjà présents sur la nouvelle map
+                new_map_players = []
+                for cid, info in manager.active_sessions.items():
+                    if cid != client_id and info["map_id"] == target_map_id:
+                        u = userManager.get_or_create_user(cid)
+                        new_map_players.append({"id": cid, "x": u.get("x", 10), "y": u.get("y", 10), "username": u.get("username", "Inconnu")})
+                await websocket.send_text(make_msg("CURRENT_PLAYERS", players=new_map_players))
+
+                # 8. Notifier les joueurs de la nouvelle map de l'arrivée
+                await manager.broadcast(make_msg(
+                    "PLAYER_JOINED",
+                    id=client_id,
+                    x=safe_x,
+                    y=safe_y,
+                    username=fresh_user.get("username", "Inconnu")
+                ), map_id=target_map_id, exclude_id=client_id)
+
+            # ──────────── ACTION_CHANGE_MAP (Legacy – désactivé) ────────────
             elif msg_type == "ACTION_CHANGE_MAP":
-                # [16.4] Rollback: Map transition disabled
-                await websocket.send_text(make_msg("ERROR", message="Le voyage inter-cartes est temporairement désactivé."))
+                await websocket.send_text(make_msg("ERROR", message="Utilisez REQUEST_TRAVEL pour voyager."))
 
             # ──────────── ADMIN COMMANDS ────────────
             elif msg_type == "ADMIN_KICK_PLAYER":

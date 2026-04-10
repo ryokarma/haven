@@ -1,7 +1,7 @@
 # PROJECT_CONTEXT — Haven
 
 > **État du projet : MVP Fonctionnel (Alpha 0.1)**
-> Dernière mise à jour : 27/03/2026
+> Dernière mise à jour : 10/04/2026
 
 ---
 
@@ -79,6 +79,7 @@
 | `PLAYER_BUILD`        | `{ x, y, itemId }`        | Construction d'un objet        |
 | `PLAYER_CHAT`         | `{ text }`                 | Message de chat                |
 | `REQUEST_WORLD_STATE` | `{}`                       | Handshake : demande l'état du monde (envoyé quand la scène est prête) |
+| `REQUEST_TRAVEL`   | `{ target_map_id }`              | Demande de voyage inter-cartes |
 
 ### Serveur → Client
 | Message            | Données                           | Description                      |
@@ -94,6 +95,7 @@
 | `RESOURCE_REMOVED` | `{ id, x, y }`                   | Objet supprimé du monde          |
 | `CHAT_MESSAGE`     | `{ sender, text, timestamp }`    | Message de chat reçu             |
 | `ERROR`            | `{ message }`                    | Erreur serveur (Fonds, Collision)|
+| `MAP_CHANGED`      | `{ map_id, map_width, map_height }` | Changement de map côté serveur — déclenche le reset du worldStore et l'attente du WORLD_STATE |
 
 ---
 
@@ -247,3 +249,6 @@
 | 29.1 | 07/04/2026 | Démarrage Bloc 6 (Session 6.2) | Correction de bugs d'affichage de l'identité des joueurs dans le module social (liste des joueurs et chat). Injection directe côté backend (dans `userManager`) du pseudonyme contenu dans le payload JWT à chaque connexion pour résoudre les "Inconnu". Le serveur injecte désormais explicitement le paramètre optionnel `sender_name` dans les WebSockets de type `CHAT_MESSAGE`. Adaptation du client vue `ChatWidget` pour afficher le pseudo complet résolu depuis le `worldStore`. |
 | 29.2 | 07/04/2026 | Fin du Bloc 6 (Session 6.3) | Clean-up final de l'interface mobile sans altérer l'UI PC. Masquage propre du titre (Hub Social) via `hidden md:block` sur la vue d'authentification (`app.vue`) et désactivation totale de l'ancienne toolbar PC sur mobile (`BuildToolbar.vue`) grâce à `hidden md:flex`. Ajustement ergonomique du chat sur mobile : remontée visuelle (`bottom-24`) et réduction drastique de sa hauteur maximale (`max-h-[15vh]`) couplée à un `overflow-y-auto` pour conserver la visibilité globale de l'écran lors d'échanges denses. |
 | 29.3 | 07/04/2026 | Fix regression: Click-through UI (Session 6.4) | Correction d'une régression critique sur le bug de "click-through" : cliquer sur l'interface déclenchait le pathfinding du personnage vers la tuile sous-jacente. Audit complet de tous les composants interactifs. Les deux lacunes identifiées étaient : (1) la popup mobile `activeMobilePopup` dans `GameUI.vue` (l.190) qui avait `pointer-events-auto` mais aucun modificateur `.stop` ; (2) l'indicateur de statut WebSocket dans `app.vue` (l.66), également sans protection. Ajout systématique de `@click.stop @pointerdown.stop @mousedown.stop @touchstart.stop` sur tous les conteneurs non protégés. Les autres composants (`ChatWidget`, `BuildToolbar`, fenêtres PC, `PlayerListWidget`, `CraftingWindow`, `CharacterWindow`, `AdminWindow`, `ProfileWindow`) étaient déjà correctement blindés. |
+| **30.0** | **10/04/2026** | **Démarrage Bloc 7 (Session 7.3) — UI de Voyage Inter-Cartes** | Implémentation complète du système de voyage entre maps. Frontend : ajout du bouton Voyager (🌍) dans la barre d'action PC et mobile de `GameUI.vue`, ouvrant une modale de sélection de destination (farm_main, desert) avec design cohérent au HUD. Store `network.ts` : ajout de `sendTravelRequest(targetMapId)` (envoie `REQUEST_TRAVEL`) et `listenForMapChange()` (écoute `MAP_CHANGED`). Store `world.ts` : `setMapInfo()` existant utilisé pour réinitialiser le state avant la réception du nouveau `WORLD_STATE`. Backend (`main.py`) : remplacement du handler `ACTION_CHANGE_MAP` bloqué par `REQUEST_TRAVEL` — retire le joueur de l'ancienne room, l'ajoute à la nouvelle, envoie `MAP_CHANGED`, `PLAYER_SYNC`, `WORLD_STATE` et `CURRENT_PLAYERS`. `gamestate.py` : initialisation de la room `desert` au démarrage + ajout de `get_map_info()`. `MainScene.ts` : enregistrement de `listenForMapChange()`. |
+| **30.1** | **10/04/2026** | **Fin Bloc 7 (Session 7.4) — Connexion Phaser au Cycle de Vie des Maps (Multivers Opérationnel)** | Connexion complète de la réponse réseau `MAP_CHANGED` au moteur Phaser. `MainScene.ts` : ajout d'un watcher Pinia sur `worldStore.mapChangedSignal` (Vue `watch()`), déclenché à chaque `MAP_CHANGED`. La méthode `triggerMapTransition()` effectue un nettoyage strict en 12 étapes (timers, tweens, joueur, ObjectManager via `clearObjects()`, MapManager via `clearMap()` + `clearOccupied()`, ghost de placement, InputManager, TileSelector, WS listeners, worldStore) avant d'appeler `scene.restart()`. Le watcher est stoppé (`stopMapWatcher()`) dans `triggerMapTransition()` et dans `shutdown()` pour éviter toute re-entrance. Guard `_travelInProgress` et `_initialMapSignal` protègent le double-fire au premier `create()`. `init()` réinitialise les flags avant chaque cycle. `GameConfig.MAP_SIZE` est désormais lu depuis `worldStore.mapWidth` (multi-map aware). `TileManager.ts` : ajout de `setBiome(biome)` + table `BIOME_TINTS` — en mode `desert`, les tuiles sol deviennent sable (tint `0xd4a855`) et les oasis (`0x4caf78`). `MapManager.ts` : appel de `setTileVariants()` dans `generate()` + exposition de `clearOccupied()`. Le z-index du canvas (`z-0` dans `GameCanvas.vue`) est préservé — `scene.restart()` ne détruit pas le canvas, seule la logique interne Phaser est reconstruite. |
+| **30.2** | **10/04/2026** | **Hotfix (Session 7.5) — Sécurisation Défensive du Changement de Map** | Résolution du crash "`Cannot read properties of undefined (reading 'size')`" survenant lors du `scene.restart()` dans Phaser. Ajout de vérifications strictes de l'existence des collections (comme `tileGroup.children` ou `objectMap`) avant appel aux méthodes Phaser internes potentiellement instables sur des managers détruits (`.clear()`, `.destroy()`). Assainissement global implémenté dans `TileManager.destroy()`, `ObjectManager.clearObjects()`, et `MapManager.clearMap()`. Purge systématique des références (`null` ou `undefined`) pour faciliter les GC sweeps. La transition inter-cartes est désormais 100% robuste. |

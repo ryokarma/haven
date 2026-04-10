@@ -15,6 +15,7 @@ import { SaveManager, type GameState } from '@/game/managers/SaveManager';
 import { InputManager } from '@/game/managers/InputManager';
 import { TileSelector } from '@/game/ui/TileSelector';
 import { Player } from '@/game/entities/Player';
+import { watch } from 'vue';
 
 export class MainScene extends Scene {
     // Stores
@@ -51,7 +52,14 @@ export class MainScene extends Scene {
     // Input Manager
     private inputManager!: InputManager;
 
-    private currentMapId: string = "farm_main";
+    private currentMapId: string = 'farm_main';
+
+    // Watcher Pinia (stoppé dans shutdown)
+    private stopMapWatcher: (() => void) | null = null;
+    // Guard anti-déclenchement double lors de la toute première création de la scène
+    private _initialMapSignal: number = 0;
+    // Flag pour indiquer qu'un voyage est en cours (bloque le double-fire)
+    private _travelInProgress: boolean = false;
 
     constructor() {
         super('MainScene');
@@ -100,14 +108,24 @@ export class MainScene extends Scene {
         this.load.image('hero', '/assets/hero.png');
     }
 
+    /**
+     * init() — Appelé par Phaser AVANT create(), même lors d'un scene.restart().
+     * Reçoit les données passées par triggerMapTransition() via scene.restart(data).
+     */
+    init(_data?: Record<string, any>): void {
+        // Réinit des flags de vélocité pour le premier create()
+        this._travelInProgress = false;
+    }
+
     create() {
         this.playerStore = usePlayerStore();
         this.worldStore = useWorldStore();
 
-        this.currentMapId = "farm_main";
+        // La map active est autorité serveur (worldStore.mapId mis à jour par MAP_CHANGED)
+        this.currentMapId = this.worldStore.mapId || 'farm_main';
 
-        // [16.4] Rollback: Retour à une seule map 100x100
-        GameConfig.MAP_SIZE = 100;
+        // Adapter la taille de la carte selon le worldStore (multi-map)
+        GameConfig.MAP_SIZE = this.worldStore.mapWidth || 100;
 
         // Réinitialiser le mode placement au démarrage par sécurité
         this.playerStore.setPlacementMode(false);
@@ -275,6 +293,7 @@ export class MainScene extends Scene {
         networkStore.listenForEconomy(); // Start listening for economy and craft success
         networkStore.listenForChatMessages(); // Start listening for incoming chat messages
         networkStore.listenForErrors(); // Start listening for server errors
+        networkStore.listenForMapChange(); // Start listening for MAP_CHANGED (inter-map travel)
 
         // Abonnement aux messages
         networkStore.onMessage((msg: any) => {
@@ -483,8 +502,95 @@ export class MainScene extends Scene {
         console.log('[MainScene] Envoi de REQUEST_WORLD_STATE (handshake initial)...');
         networkStore.send('REQUEST_WORLD_STATE');
 
+        // ──────────────────────────────────────────────────────────
+        // WATCHER PINIA : Écoute de mapChangedSignal
+        // Déclenché chaque fois que le serveur envoie MAP_CHANGED
+        // (via listenForMapChange dans network.ts → worldStore.setMapInfo)
+        // ──────────────────────────────────────────────────────────
+        const worldStoreRef = this.worldStore;
+
+        // Mémoriser le signal courant pour éviter le déclenchement sur la première création
+        this._initialMapSignal = worldStoreRef.mapChangedSignal;
+
+        this.stopMapWatcher = watch(
+            () => worldStoreRef.mapChangedSignal,
+            (newSignal) => {
+                // Ignorer le signal initial (valeur que la scène a vu lors de son init)
+                if (newSignal === this._initialMapSignal) return;
+                // Guard anti-double-fire
+                if (this._travelInProgress) {
+                    console.warn('[MainScene] MAP_CHANGED reçu mais voyage déjà en cours, ignoré.');
+                    return;
+                }
+                console.log(`[MainScene] MAP_CHANGED détecté (signal ${newSignal}) → déclenchement transition.`);
+                this.triggerMapTransition();
+            }
+        );
+
         // Cleanup on shutdown
         this.events.once('shutdown', this.shutdown, this);
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // TRANSITION DE MAP — Nettoyage strict + scene.restart()
+    // ──────────────────────────────────────────────────────────────────────────
+    private triggerMapTransition(): void {
+        if (this._travelInProgress) return;
+        this._travelInProgress = true;
+
+        console.log(`[MainScene] triggerMapTransition() — Nettoyage en cours pour ${this.worldStore.mapId}...`);
+
+        // 1. Stopper le watcher Pinia avant le restart pour éviter les re-entrances
+        if (this.stopMapWatcher) {
+            this.stopMapWatcher();
+            this.stopMapWatcher = null;
+        }
+
+        // 2. Arrêter les timers Phaser
+        if (this.survivalTimer) { this.survivalTimer.destroy(); this.survivalTimer = undefined; }
+        if (this.worldTimer)    { this.worldTimer.destroy();    this.worldTimer = undefined; }
+
+        // 3. Tuer tous les tweens actifs
+        this.tweens.killAll();
+
+        // 4. Arrêter le mouvement du joueur
+        this.isMoving = false;
+        this.currentPath = [];
+        this.pendingAction = null;
+
+        // 5. Détruire le sprite joueur
+        if (this.player) {
+            this.player.destroy();
+        }
+
+        // 6. Vider les managers (objects + tuiles)
+        if (this.objectManager) { this.objectManager.clearObjects(); }
+        if (this.mapManager)    {
+            this.mapManager.clearMap();
+            this.mapManager.clearOccupied();
+        }
+
+        // 7. Détruire le ghost de placement
+        if (this.placementGhost) { this.placementGhost.destroy(); this.placementGhost = null; }
+
+        // 8. Nettoyer l'InputManager
+        if (this.inputManager)  { this.inputManager.destroy(); }
+
+        // 9. Nettoyer le tileSelector
+        if (this.tileSelector)  { this.tileSelector.destroy?.(); }
+
+        // 10. NetworkStore : vider les listeners et noter que le joueur n'est plus en mouvement
+        const networkStore = useNetworkStore();
+        networkStore.clearMessages();
+
+        // 11. Marquer le worldStore comme non-chargé (spinnerUI)
+        this.worldStore.setMapLoaded(false);
+
+        console.log('[MainScene] Nettoyage terminé — scene.restart() en cours...');
+
+        // 12. Restart de la scène Phaser — Phaser invoquera init() puis create()
+        //     Le canvas reste en place (z-0), seule la logique interne est reconstruite.
+        this.scene.restart();
     }
 
     override update(time: number, delta: number) {
@@ -646,15 +752,25 @@ export class MainScene extends Scene {
 
     /**
      * Nettoyage des ressources à la fermeture de la scène
+     * (appelé par Phaser lors d'un scene.stop() ou scene.restart() juste avant destroy interne)
      */
     private shutdown() {
+        // Stopper le watcher Pinia (critique : arrêter l'écoute Pinia hors du cycle Phaser)
+        if (this.stopMapWatcher) {
+            this.stopMapWatcher();
+            this.stopMapWatcher = null;
+        }
+
         if (this.survivalTimer) this.survivalTimer.destroy();
-        if (this.worldTimer) this.worldTimer.destroy();
+        if (this.worldTimer)    this.worldTimer.destroy();
 
-        if (this.inputManager) this.inputManager.destroy();
+        // Tuer tous les tweens en cours
+        this.tweens.killAll();
 
-        if (this.tileManager) this.tileManager.destroy();
-        // Add other destroy calls if managers implement them
+        if (this.inputManager)  this.inputManager.destroy();
+        if (this.tileManager)   this.tileManager.destroy();
+
+        if (this.objectManager) this.objectManager.clearObjects();
     }
 
     /**

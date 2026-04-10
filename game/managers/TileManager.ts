@@ -38,6 +38,15 @@ export class TileManager {
     private tileGroup: Phaser.GameObjects.Group;
     private tileVariations: string[];
     private waterVariations: string[];
+    private currentBiome: string = 'farm_main';
+
+    // Teintes par biome
+    // Désert : herbe → sable ocre, eau → oasis verte
+    private static readonly BIOME_TINTS: Record<string, { ground: number | null; water: number | null }> = {
+        'farm_main': { ground: null, water: null }, // Naturel, aucune teinte
+        'desert':    { ground: 0xd4a855, water: 0x4caf78 }, // Sable + Oasis
+        'housing_hub_1': { ground: null, water: null },
+    };
 
     // Couleurs pour visualiser les différentes configurations d'auto-tiling (placeholder)
     // Palette bleue pour représenter l'eau avec différentes nuances selon les connexions
@@ -75,6 +84,13 @@ export class TileManager {
             'water-2',
             'water-3'
         ];
+    }
+
+    /**
+     * Définit le biome actif. Ceci affecte la teinte appliquée lors du placement des tuiles.
+     */
+    public setBiome(biome: string): void {
+        this.currentBiome = biome;
     }
 
     /**
@@ -184,6 +200,20 @@ export class TileManager {
         tile.setOrigin(0.5, 0.5);
         tile.setDepth(-1000);
 
+        // Appliquer la teinte de biome si définie
+        const biomeTints = TileManager.BIOME_TINTS[this.currentBiome];
+        if (biomeTints) {
+            if (tileType === TileType.WATER && biomeTints.water !== null) {
+                tile.setTint(biomeTints.water);
+            } else if (tileType !== TileType.WATER && biomeTints.ground !== null) {
+                tile.setTint(biomeTints.ground);
+            }
+        }
+
+        // Stocker la teinte d'origine pour que l'AmbianceManager puisse la multiplier
+        tile.setData('originalTint', tile.tintTopLeft);
+        tile.setData('hasOriginalTint', true);
+
         // Appliquer l'auto-tiling si c'est une tuile d'eau et que les données de grille sont fournies
         if (tileType === TileType.WATER && gridData) {
             const autotileIndex = this.calculateAutotile(x, y, gridData, TileType.WATER);
@@ -274,7 +304,28 @@ export class TileManager {
      */
     destroy(): void {
         if (this.tileGroup) {
-            this.tileGroup.clear(true, true);
+            // Group.clear(true, true) sollicite this.tileGroup.children.size dans Phaser.
+            // On s'assure que la collection existe avant d'appeler clear.
+            if (this.tileGroup.children) {
+                this.tileGroup.clear(true, true);
+            }
+            this.tileGroup.destroy();
+            (this as any).tileGroup = null;
+        }
+
+        if (this.tileVariations) {
+            this.tileVariations.length = 0;
+            (this as any).tileVariations = null;
+        }
+
+        if (this.waterVariations) {
+            this.waterVariations.length = 0;
+            (this as any).waterVariations = null;
+        }
+
+        if (this.autotileColors) {
+            this.autotileColors.length = 0;
+            (this as any).autotileColors = null;
         }
     }
 }

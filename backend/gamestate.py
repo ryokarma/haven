@@ -187,6 +187,7 @@ class GameState:
         self.maps: Dict[str, RoomState] = {}
         
         self.maps["farm_main"] = generate_room_state("farm_main", WORLD_SEED)
+        self.maps["desert"] = generate_room_state("desert", WORLD_SEED + 1)  # Seed distinct
         self.maps["housing_hub_1"] = generate_room_state("housing_hub_1", WORLD_SEED)
         self.game_time = 480 # 08:00 AM in-game time
         
@@ -234,6 +235,13 @@ class GameState:
         new_seed = random.randint(1, 1000000)
         self.maps[map_id] = generate_room_state(map_id, new_seed)
         return self.get_full_state(map_id)
+
+    def get_map_info(self, map_id: str) -> Dict[str, Any]:
+        """Retourne les informations de structure d'une map (dimensions)."""
+        if map_id not in self.maps:
+            self.maps[map_id] = generate_room_state(map_id, WORLD_SEED)
+        room = self.maps[map_id]
+        return {"width": room.width, "height": room.height}
 
     def get_safe_spawn(self, map_id: str = "farm_main") -> tuple[int, int]:
         """Trouve une coordonnée sûre (sans eau, sans obstacle) près du centre."""
