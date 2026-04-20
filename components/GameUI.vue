@@ -93,6 +93,10 @@ watch(() => player.lastActionFeedback, (newVal) => {
     feedbackMessage.value = null;
   }, 3000);
 });
+
+// Réinitialise le flag UI quand TOUTES les fenêtres sont fermées.
+// Nécessaire car pointerleave ne fire pas toujours à l'unmount d'un v-if.
+// (Supprimé car on utilise mousedown.stop)
 </script>
 
 <template>
@@ -101,7 +105,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
     <!-- PLAYER LIST WIDGET -->
     <PlayerListWidget />
     
-    <div class="pointer-events-auto flex items-start z-10 w-fit relative" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+    <div class="pointer-events-auto flex items-start z-10 w-fit relative" @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop>
         
         <!-- ============================== -->
         <!-- PC ONLY: AVATAR & STATS COLUMN -->
@@ -199,7 +203,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
         <!-- ============================== -->
         <!-- MOBILE ONLY: POPUP WINDOWS     -->
         <!-- ============================== -->
-        <div v-if="activeMobilePopup" class="md:hidden absolute top-16 left-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 p-4 animate-fade-in-down origin-top-left pointer-events-auto" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+        <div v-if="activeMobilePopup" class="md:hidden absolute top-16 left-0 w-64 bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 p-4 animate-fade-in-down origin-top-left pointer-events-auto" @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop>
             
             <!-- Stats Popup -->
             <div v-if="activeMobilePopup === 'stats'" class="flex flex-col gap-3">
@@ -276,8 +280,8 @@ watch(() => player.lastActionFeedback, (newVal) => {
     <!-- ============================== -->
     <!-- PC ONLY: INVENTAIRE MODAL      -->
     <!-- ============================== -->
-    <div v-if="isInventoryOpen" class="pointer-events-auto absolute inset-0 hidden md:flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all z-50" @click.self="isInventoryOpen = false" @pointerdown.self.stop @mousedown.self.stop @touchstart.self.stop>
-      <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20 pointer-events-auto" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+    <div v-if="isInventoryOpen" class="pointer-events-auto absolute inset-0 hidden md:flex items-center justify-center bg-black/40 backdrop-blur-sm transition-all z-50" @click.self="isInventoryOpen = false" @mousedown.self.stop @touchstart.self.stop @pointerdown.self.stop>
+      <div class="relative w-96 rounded-3xl border border-white/10 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl ring-1 ring-white/20 pointer-events-auto" @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop>
         
         <div class="mb-4 flex items-center justify-between border-b border-white/10 pb-4 shrink-0">
             <h2 class="flex items-center gap-2 text-xl font-bold text-amber-100">
@@ -321,29 +325,29 @@ watch(() => player.lastActionFeedback, (newVal) => {
 
     <CraftingWindow 
         v-if="isCraftingOpen" 
-        @close="isCraftingOpen = false" 
+        @close="isCraftingOpen = false"
     />
 
     <CharacterWindow 
         v-if="isCharacterOpen" 
-        @close="isCharacterOpen = false" 
+        @close="isCharacterOpen = false"
     />
 
     <AdminWindow 
         v-if="isAdminOpen" 
-        @close="isAdminOpen = false" 
+        @close="isAdminOpen = false"
     />
 
     <ProfileWindow 
         v-if="isProfileOpen" 
         :player-id="inspectedPlayerId || undefined"
-        @close="isProfileOpen = false" 
+        @close="isProfileOpen = false"
     />
 
     <!-- ============================== -->
     <!-- PC ONLY: BOTTOM ACTION BAR     -->
     <!-- ============================== -->
-    <div class="absolute bottom-4 right-4 hidden md:flex items-center justify-end gap-3 pointer-events-auto z-10" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+    <div class="absolute bottom-4 right-4 hidden md:flex items-center justify-end gap-3 pointer-events-auto z-10" @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop>
           <!-- Bouton Voyager (Nouveau) -->
           <button
             @click="isTravelOpen = !isTravelOpen"
@@ -415,7 +419,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
     <!-- ============================== -->
     <!-- MOBILE ONLY: BOTTOM BAR ICONS  -->
     <!-- ============================== -->
-    <div class="md:hidden absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl border border-white/15 px-6 py-3 rounded-[2rem] shadow-2xl z-40 pointer-events-auto" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+    <div class="md:hidden absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-slate-900/90 backdrop-blur-xl border border-white/15 px-6 py-3 rounded-[2rem] shadow-2xl z-40 pointer-events-auto" @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop>
         
         <!-- Inventory (Resources) -->
         <button @click="activeMobilePopup = activeMobilePopup === 'inventory' ? null : 'inventory'" 
@@ -453,7 +457,7 @@ watch(() => player.lastActionFeedback, (newVal) => {
     <!-- ============================== -->
     <div v-if="activeMobilePopup === 'inventory' || activeMobilePopup === 'tools'" 
          class="md:hidden absolute bottom-24 left-3 right-3 bg-slate-900/95 backdrop-blur-xl border border-white/15 rounded-3xl shadow-2xl z-50 p-5 pointer-events-auto flex flex-col" 
-         style="max-height: 50vh;" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+         style="max-height: 50vh;" @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop>
         
         <!-- Bouton Fermer -->
         <button @click="activeMobilePopup = null" class="absolute top-4 right-4 flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-slate-300 hover:text-white transition-colors active:scale-95 z-10">
@@ -516,11 +520,11 @@ watch(() => player.lastActionFeedback, (newVal) => {
         v-if="isTravelOpen"
         class="pointer-events-auto absolute inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50"
         @click.self="isTravelOpen = false"
-        @pointerdown.self.stop @mousedown.self.stop @touchstart.self.stop
+        @mousedown.self.stop @touchstart.self.stop @pointerdown.self.stop
     >
         <div
             class="relative w-full max-w-md mx-4 rounded-3xl border border-cyan-500/20 bg-slate-900/95 shadow-2xl backdrop-blur-xl p-6 animate-fade-in-down"
-            @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop
+            @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop
         >
             <!-- Header -->
             <div class="flex items-center justify-between mb-6 pb-4 border-b border-white/10">

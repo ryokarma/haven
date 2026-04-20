@@ -252,3 +252,60 @@
 | **30.0** | **10/04/2026** | **Démarrage Bloc 7 (Session 7.3) — UI de Voyage Inter-Cartes** | Implémentation complète du système de voyage entre maps. Frontend : ajout du bouton Voyager (🌍) dans la barre d'action PC et mobile de `GameUI.vue`, ouvrant une modale de sélection de destination (farm_main, desert) avec design cohérent au HUD. Store `network.ts` : ajout de `sendTravelRequest(targetMapId)` (envoie `REQUEST_TRAVEL`) et `listenForMapChange()` (écoute `MAP_CHANGED`). Store `world.ts` : `setMapInfo()` existant utilisé pour réinitialiser le state avant la réception du nouveau `WORLD_STATE`. Backend (`main.py`) : remplacement du handler `ACTION_CHANGE_MAP` bloqué par `REQUEST_TRAVEL` — retire le joueur de l'ancienne room, l'ajoute à la nouvelle, envoie `MAP_CHANGED`, `PLAYER_SYNC`, `WORLD_STATE` et `CURRENT_PLAYERS`. `gamestate.py` : initialisation de la room `desert` au démarrage + ajout de `get_map_info()`. `MainScene.ts` : enregistrement de `listenForMapChange()`. |
 | **30.1** | **10/04/2026** | **Fin Bloc 7 (Session 7.4) — Connexion Phaser au Cycle de Vie des Maps (Multivers Opérationnel)** | Connexion complète de la réponse réseau `MAP_CHANGED` au moteur Phaser. `MainScene.ts` : ajout d'un watcher Pinia sur `worldStore.mapChangedSignal` (Vue `watch()`), déclenché à chaque `MAP_CHANGED`. La méthode `triggerMapTransition()` effectue un nettoyage strict en 12 étapes (timers, tweens, joueur, ObjectManager via `clearObjects()`, MapManager via `clearMap()` + `clearOccupied()`, ghost de placement, InputManager, TileSelector, WS listeners, worldStore) avant d'appeler `scene.restart()`. Le watcher est stoppé (`stopMapWatcher()`) dans `triggerMapTransition()` et dans `shutdown()` pour éviter toute re-entrance. Guard `_travelInProgress` et `_initialMapSignal` protègent le double-fire au premier `create()`. `init()` réinitialise les flags avant chaque cycle. `GameConfig.MAP_SIZE` est désormais lu depuis `worldStore.mapWidth` (multi-map aware). `TileManager.ts` : ajout de `setBiome(biome)` + table `BIOME_TINTS` — en mode `desert`, les tuiles sol deviennent sable (tint `0xd4a855`) et les oasis (`0x4caf78`). `MapManager.ts` : appel de `setTileVariants()` dans `generate()` + exposition de `clearOccupied()`. Le z-index du canvas (`z-0` dans `GameCanvas.vue`) est préservé — `scene.restart()` ne détruit pas le canvas, seule la logique interne Phaser est reconstruite. |
 | **30.2** | **10/04/2026** | **Hotfix (Session 7.5) — Sécurisation Défensive du Changement de Map** | Résolution du crash "`Cannot read properties of undefined (reading 'size')`" survenant lors du `scene.restart()` dans Phaser. Ajout de vérifications strictes de l'existence des collections (comme `tileGroup.children` ou `objectMap`) avant appel aux méthodes Phaser internes potentiellement instables sur des managers détruits (`.clear()`, `.destroy()`). Assainissement global implémenté dans `TileManager.destroy()`, `ObjectManager.clearObjects()`, et `MapManager.clearMap()`. Purge systématique des références (`null` ou `undefined`) pour faciliter les GC sweeps. La transition inter-cartes est désormais 100% robuste. |
+| **31.0** | **20/04/2026** | **Démarrage Bloc 8 (Session 8.1) — Ajustement du Cycle Jour/Nuit** | Refonte de la vitesse de la boucle temporelle (`time_sync_loop`) côté serveur (`backend/main.py`) pour offrir une meilleure expérience Roleplay. Adaptation asymétrique et dynamique : la phase de "Jour" complet (8h-17h, luminosité locale max) tourne 2x moins vite avec un incrément de 5min, "allongeant" sa durée réelle. En contrepartie, la "Nuit" profonde (22h-5h, luminosité locale min) est écourtée, tournant 2x plus vite avec un incrément de 20min. Les transitions intermédiaires cruciales comme l'aube et le crépuscule conservent leur vitesse d'origine (incrément de 10) pour ne pas casser la fluidité du tween client-side local (`AmbianceManager.ts`). |
+| **31.1** | **20/04/2026** | **Suite Bloc 8 (Session 8.2) — Migration Autorité Serveur: Énergie & Fatigue** | Migration complète de la gestion de la mécanique de survie vers le serveur. Création de la colonne `energy` (def 100) en base de données SQLite (`models.py`) et persistance in-memory via `UserManager`. Ajout de l'événement backend `ACTION_CONSUME` avec `consume_item()` pour manipuler la récupération + diffusion WS `ENERGY_UPDATED` pour la UI (`main.py` + `gamestate.py`). Implémentation de la règle de sécurité: la consommation est **toujours** autorisée même à 0 énergie. En parallèle, `ACTION_HARVEST` est mis à jour : échec strict si l'énergie du joueur est trop basse (`< harvest_cost`), et déduction synchronisée garantissant la tolérance zéro face à la falsification des stats client-side. |
+| **31.2** | **20/04/2026** | **Fin Bloc 8 (Session 8.3) — Câblage Frontend Survie** | Câblage du client sur l'état d'énergie serveur. Ajout de `ENERGY_UPDATED` dans `listenForEconomy()` de `network.ts`. La méthode locale de récolte (`harvestResource`) dans `MainScene.ts` ne soustrait désormais plus l'énergie (attendant le retour du serveur), gardant seulement la vérification visuelle anticipée. `consumeItem()` dans `player.ts` délègue sa requête via `ACTION_CONSUME` pour l'énergie. |
+| **31.3** | **20/04/2026** | **Bloc 8 — Refactoring Architecture Inputs (Anti Event-Bleeding Définitif)** | Résolution définitive du conflit d'événements entre l'UI VueJS et le Canvas Phaser. Voir la section "Architecture Inputs" ci-dessous. |
+
+---
+
+## 🎮 Architecture Inputs (Anti Event-Bleeding)
+
+### Problème
+
+Dans une application hybride DOM/Canvas, Phaser et Vue se disputent les événements pointeur. Quand un joueur clique sur un élément d'interface (tchat, inventaire, profil), le clic "traverse" l'UI et déclenche une action dans le monde Phaser (pathfinding, récolte).
+
+### Cause Racine
+
+Par défaut, Phaser attache ses listeners (`pointerdown`, `pointermove`, `pointerup`) sur **`window`**, pas sur le `<canvas>`. C'est contrôlé par l'option `input.windowEvents` (défaut : `true`). Conséquence : peu importe la hiérarchie DOM ou les modificateurs Vue (`.stop`, `.prevent`) — l'événement atteint toujours `window` et Phaser le capte.
+
+### Solution : `input.windowEvents: false`
+
+**Fichier** : `components/GameCanvas.vue` — Config Phaser
+
+```ts
+input: {
+    windowEvents: false,
+}
+```
+
+Avec cette option, Phaser n'écoute **que** sur le `<canvas>`. Le navigateur applique alors son modèle natif d'événements :
+- L'élément DOM le plus haut dans le stacking order (`z-index` + `pointer-events: auto`) reçoit le clic
+- Le canvas en dessous ne voit jamais l'événement
+- Aucun hack nécessaire
+
+### Architecture CSS Requise
+
+| Couche | Élément | `pointer-events` | `z-index` |
+|---|---|---|---|
+| **Fond** | `<canvas>` (Phaser) | `auto` (natif) | `z-0` |
+| **Overlay** | Conteneur GameUI | `none` | `z-10+` |
+| **Panneaux** | Chat, Inventaire, Modales | `auto` | `z-40/50` |
+
+Le conteneur global `GameUI.vue` a `pointer-events-none` → les clics passent au canvas.
+Les panneaux interactifs individuels ont `pointer-events-auto` → ils capturent les clics avant le canvas.
+
+### Approches Abandonnées (pour mémoire)
+
+| Approche | Pourquoi elle échoue |
+|---|---|
+| Vue `.stop` / `.prevent` | Phaser écoute sur `window`, pas dans l'arbre DOM Vue |
+| Pinia `isPointerOverUI` | Clics morts au démontage (`pointerleave` ne fire pas), ne bloque pas les `gameobjectup` |
+| `document.elementFromPoint()` | Race conditions, coûteux, peu fiable avec les overlays transparents |
+
+### Règle de Développement
+
+Les modificateurs Vue (`.stop`) sur les panneaux sont conservés comme **défense en profondeur** mais ne sont plus le mécanisme principal. Tout nouveau composant UI doit simplement :
+1. Avoir `pointer-events: auto` (classe Tailwind `pointer-events-auto`)
+2. Être positionné au-dessus du canvas (`z-index >= 10`)
+

@@ -14,7 +14,7 @@ const onlineCount = computed(() => {
 </script>
 
 <template>
-  <div class="pointer-events-auto absolute top-4 right-4 z-40 hidden md:flex flex-col items-end gap-2" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+  <div class="pointer-events-auto absolute top-4 right-4 z-40 hidden md:flex flex-col items-end gap-2" @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop>
     
     <!-- Toggle Button -->
     <button 

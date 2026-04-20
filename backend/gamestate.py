@@ -359,6 +359,16 @@ class GameState:
         if asset in ["clay_node", "clay_mound"] and equipped_tool != "shovel":
             return "Outil inadapté. Pelle requise."
 
+        # Verification de l'énergie (Session 8.2)
+        harvest_cost = 3
+        current_energy = user.get("energy", 100)
+        if current_energy < harvest_cost:
+            return "Trop fatigué !"
+
+        # Déduire l'énergie
+        user["energy"] = current_energy - harvest_cost
+        user_manager.save_users()
+
         if asset == "apple_tree":
             loot = {"apple": 1}
             new_wallet = None
@@ -387,6 +397,25 @@ class GameState:
             new_wallet = user_manager.update_wallet(player_id, res_type, amount)
 
         return removed, new_wallet or {}, loot
+
+    def consume_item(self, player_id: str, item_id: str, user_manager: Any) -> Optional[int]:
+        """Consomme un article de l'inventaire pour récupérer de l'énergie, même si l'énergie est à 0."""
+        consumables = {
+            "apple": 20,
+        }
+        energy_gain = consumables.get(item_id, 15)  # Restauration par défaut de 15
+        
+        success = user_manager.consume_item(player_id, item_id, 1)
+        if not success:
+            return None
+            
+        user = user_manager.get_or_create_user(player_id)
+        current_energy = user.get("energy", 100)
+        new_energy = min(100, current_energy + energy_gain)
+        user["energy"] = new_energy
+        user_manager.save_users()
+        
+        return new_energy
 
     def add_resource(self, asset: str, obj_type: str, x: int, y: int, map_id: str = "farm_main") -> Optional[Dict[str, Any]]:
         """

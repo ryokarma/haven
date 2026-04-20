@@ -226,6 +226,11 @@ export const useNetworkStore = defineStore('network', () => {
         send('ACTION_PLACE', { x, y, itemId: item_id });
     }
 
+    function sendConsume(item_id: string) {
+        console.log(`[Network] → ACTION_CONSUME: itemId=${item_id}`);
+        send('ACTION_CONSUME', { itemId: item_id });
+    }
+
     // --- Travel ---
     function sendTravelRequest(targetMapId: string) {
         console.log(`[Network] → REQUEST_TRAVEL: target_map_id=${targetMapId}`);
@@ -261,6 +266,10 @@ export const useNetworkStore = defineStore('network', () => {
                 if (msg.payload && msg.payload.itemId) {
                     playerStore.removeItem(msg.payload.itemId, 1);
                     playerStore.lastActionFeedback = "Objet placé !#" + Date.now();
+                }
+            } else if (msg.type === 'ENERGY_UPDATED') {
+                if (msg.payload && msg.payload.energy !== undefined) {
+                    playerStore.stats.energy = msg.payload.energy;
                 }
             }
         });
@@ -324,6 +333,7 @@ export const useNetworkStore = defineStore('network', () => {
         sendHarvest,
         sendCraft,
         sendPlace,
+        sendConsume,
         sendTravelRequest,
         sendAdminKick,
         sendAdminRegenerateMap,

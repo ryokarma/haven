@@ -64,7 +64,7 @@ const getSenderName = (msg: any) => {
 </script>
 
 <template>
-  <div class="pointer-events-auto absolute bottom-24 md:bottom-32 left-2 md:left-4 z-40 flex flex-col gap-1 md:gap-2 w-48 sm:w-64 md:w-80 max-h-36 md:max-h-[500px]" @click.stop @pointerdown.stop @mousedown.stop @touchstart.stop>
+  <div class="pointer-events-auto absolute bottom-24 md:bottom-32 left-2 md:left-4 z-40 flex flex-col gap-1 md:gap-2 w-48 sm:w-64 md:w-80 max-h-36 md:max-h-[500px]" @click.stop @mousedown.stop @touchstart.stop @pointerdown.stop @wheel.stop>
     <!-- Messages List -->
     <div 
         ref="messagesContainer"

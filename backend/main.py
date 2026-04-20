@@ -30,6 +30,14 @@ from pydantic import BaseModel
 # ──────────────────────────────────────────────
 app = FastAPI(title="Haven Backend", version="0.1.0")
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 @app.on_event("startup")
 async def startup():
     async with engine.begin() as conn:
@@ -65,7 +73,19 @@ async def time_sync_loop():
     print("[TimeSync] Boucle de temps démarrée.")
     while True:
         await asyncio.sleep(1)
-        new_time = gameState.tick_time(10)
+        
+        current_hour = gameState.game_time / 60.0
+        if 8 <= current_hour < 17:
+            # Jour (luminosité max) : dure 2x plus longtemps (incrément 5 au lieu de 10)
+            increment = 5
+        elif current_hour >= 22 or current_hour < 5:
+            # Nuit (luminosité min) : dure 0.5x (incrément 20 au lieu de 10)
+            increment = 20
+        else:
+            # Transitions Aube (5h-8h) / Crépuscule (17h-22h) : vitesse normale pour lerp fluide
+            increment = 10
+            
+        new_time = gameState.tick_time(increment)
         
         # Broadcast the new time to all maps
         msg = make_msg("TIME_SYNC", time=new_time)
@@ -352,6 +372,10 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                 if new_wallet:
                     await websocket.send_text(make_msg("WALLET_UPDATE", payload=new_wallet))
 
+                # ── Energy update pour notifier le client de la perte (Session 8.2) ──
+                user_updated = userManager.get_or_create_user(client_id)
+                await websocket.send_text(make_msg("ENERGY_UPDATED", payload={"energy": user_updated.get("energy", 100)}))
+
                 # ── Feedback visuel (floating text) ──
                 await websocket.send_text(make_msg(
                     "HARVEST_SUCCESS",
@@ -378,6 +402,19 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str, token: str = 
                     ), map_id=current_map)
                 # Sinon pour apple_tree : on ne fait rien de plus,
                 # l'arbre reste dans le WORLD_STATE, aucun WORLD_STATE à rebrod.
+
+            # ──────────── ACTION_CONSUME (Manger / Boire) ────────────
+            elif msg_type == "ACTION_CONSUME":
+                item_id = payload.get("itemId")
+                if not item_id:
+                    continue
+                
+                new_energy = gameState.consume_item(client_id, item_id, userManager)
+                if new_energy is None:
+                    await websocket.send_text(make_msg("ERROR", message=f"Impossible de consommer {item_id} (plus en inventaire)"))
+                    continue
+                
+                await websocket.send_text(make_msg("ENERGY_UPDATED", payload={"energy": new_energy}))
                     
             # ──────────── PLAYER_INTERACT (Legacy Récolte) ────────────
             elif msg_type == "PLAYER_INTERACT":

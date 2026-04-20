@@ -32,7 +32,8 @@ class UserManager:
                 "id": user_id,
                 "x": 200, 
                 "y": 200,
-                "wallet": {"wood": 0, "stone": 0} # Initialisation du wallet
+                "wallet": {"wood": 0, "stone": 0}, # Initialisation du wallet
+                "energy": 100
             }
             self.save_users()
         return self.users[user_id]

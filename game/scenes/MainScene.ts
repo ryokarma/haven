@@ -991,7 +991,7 @@ export class MainScene extends Scene {
                 return;
             }
 
-            this.playerStore.consumeEnergy(harvestCost);
+            // Session 8.3: On ne déduit plus l'énergie localement ici. Le serveur nous enverra un ENERGY_UPDATED.
 
             // Feedback visuel sur l'effort
             const isEfficient = harvestCost < 3;

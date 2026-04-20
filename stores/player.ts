@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { GameConfig } from '@/game/config/GameConfig';
 import { getItemData, type ItemData } from '@/game/config/ItemRegistry';
+import { useNetworkStore } from './network';
 
 // Interface pour un objet groupé
 export interface InventoryItem {
@@ -421,23 +422,12 @@ export const usePlayerStore = defineStore('player', {
             const effect = GameConfig.ITEM_EFFECTS[itemName];
 
             if (effect) {
-                // Vérifier si la consommation est utile (pas de gaspillage)
-                let isUseful = false;
-
-                if (effect.hunger && this.stats.hunger < this.stats.maxHunger) isUseful = true;
-                if (effect.thirst && this.stats.thirst < this.stats.maxThirst) isUseful = true;
-                if (effect.energy && this.stats.energy < this.stats.maxEnergy) isUseful = true;
-                if (effect.health && this.stats.health < this.stats.maxHealth) isUseful = true;
-
-                if (!isUseful) {
-                    // Feedback UI
-                    this.lastActionFeedback = `Pas nécessaire...#${Date.now()}`;
-                    return;
-                }
+                // SESSION 8.3 : Envoi au backend pour restaurer l'énergie (sans altération locale)
+                const networkStore = useNetworkStore();
+                networkStore.sendConsume(itemName);
 
                 const changes: Partial<PlayerState['stats']> = {};
                 if (effect.hunger) changes.hunger = this.stats.hunger + effect.hunger;
-                if (effect.energy) changes.energy = this.stats.energy + effect.energy;
                 if (effect.thirst) changes.thirst = this.stats.thirst + effect.thirst;
                 if (effect.health) changes.health = this.stats.health + effect.health;
 
@@ -447,7 +437,7 @@ export const usePlayerStore = defineStore('player', {
                 const feedbackParts = [];
                 if (effect.hunger) feedbackParts.push(`+${effect.hunger} Faim`);
                 if (effect.thirst) feedbackParts.push(`+${effect.thirst} Soif`);
-                if (effect.energy) feedbackParts.push(`+${effect.energy} Énergie`);
+                if (effect.energy) feedbackParts.push(`Énergie en régénération...`);
                 if (effect.health) feedbackParts.push(`+${effect.health} Santé`);
 
                 // Mettre à jour le feedback pour l'UI / Phaser

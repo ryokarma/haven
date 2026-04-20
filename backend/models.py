@@ -77,6 +77,7 @@ class User(Base):
     map_id = Column(String, default="main")           # Carte courante (ex: surface, cave)
     wallet = Column(JSON, default=dict)               # Monnaie locale (ex: wood, stone)
     inventory = Column(JSON, default=dict)            # Inventaire local du personnage
+    energy = Column(Integer, default=100)             # Energie pour les actions
 
 class WorldItem(Base):
     __tablename__ = "world_items"

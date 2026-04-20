@@ -38,6 +38,26 @@ const config: Phaser.Types.Core.GameConfig = {
     pixelArt: false,
     antialias: true,
   },
+  // ════════════════════════════════════════════════════════════════
+  // FIX DÉFINITIF DU "EVENT BLEEDING" (Canvas ↔ Vue UI)
+  //
+  // Par défaut, Phaser attache ses listeners (pointerdown, pointermove,
+  // pointerup) sur `window` — pas sur le <canvas>. Résultat : même si
+  // un div Vue avec pointer-events:auto est au-dessus, le clic remonte
+  // jusqu'à window et Phaser le capte quand même.
+  //
+  // Avec `windowEvents: false`, Phaser n'écoute QUE sur le <canvas>.
+  // Le navigateur applique alors son modèle natif : l'élément DOM le
+  // plus haut dans le stacking order (z-index + pointer-events) reçoit
+  // le clic, et le canvas en dessous ne le voit jamais.
+  //
+  // Conséquence : les modificateurs Vue (.stop) deviennent optionnels
+  // (défense en profondeur uniquement). Aucun hack DOM, aucun state
+  // Pinia, aucun elementFromPoint n'est nécessaire.
+  // ════════════════════════════════════════════════════════════════
+  input: {
+    windowEvents: false,
+  },
   physics: {
     default: 'arcade',
     arcade: { debug: false }

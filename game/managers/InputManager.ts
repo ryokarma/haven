@@ -14,6 +14,14 @@ export type InputEvent = {
  * Gestionnaire des entrées (InputManager)
  * Capture les événements bruts (Souris, Clavier) et les transforme en événements de jeu sémantiques.
  * Permet de découpler la logique de la Scène et de préparer l'architecture serveur.
+ *
+ * ARCHITECTURE INPUTS (Session 8.x) :
+ * La protection contre l'Event Bleeding (clics UI → Canvas) est gérée
+ * par `input.windowEvents: false` dans la config Phaser (GameCanvas.vue).
+ * Phaser n'écoute QUE sur le <canvas>. Les éléments Vue avec
+ * `pointer-events: auto` au-dessus absorbent naturellement les clics
+ * grâce au modèle d'événements natif du navigateur.
+ * Aucune vérification UI n'est nécessaire ici.
  */
 export class InputManager {
     private scene: Phaser.Scene;
@@ -59,8 +67,6 @@ export class InputManager {
 
         // Pointer Down (Début potentiel de drag ou clic)
         this.scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-            if (this.isUIInteraction(pointer)) return;
-
             this.dragStartX = pointer.x;
             this.dragStartY = pointer.y;
             this.isDragging = false;
@@ -92,8 +98,6 @@ export class InputManager {
 
         // Pointer Up (Action : Clic ou Fin de Drag)
         this.scene.input.on('pointerup', (pointer: Phaser.Input.Pointer) => {
-            if (this.isUIInteraction(pointer)) return;
-
             // Si c'était un drag, on arrête là
             if (this.isDragging) {
                 this.isDragging = false;
@@ -188,17 +192,6 @@ export class InputManager {
                 camera.zoom + GameConfig.CAMERA.zoomSpeed
             );
         }
-    }
-
-    /**
-     * Vérifie si l'interaction est sur l'UI (hors Canvas de jeu si superposé)
-     * Note: Dans Phaser, `event.target` pointe souvent sur le Canvas. 
-     * Si l'UI VueJS est au-dessus, elle intercepte généralement les événements avant le Canvas.
-     * Cette méthode est un placeholder pour une logique plus complexe si nécessaire.
-     */
-    private isUIInteraction(pointer: Phaser.Input.Pointer): boolean {
-        // Logique spécifique si besoin (ex: vérifier des zones d'exclusion)
-        return false;
     }
 
     /**
