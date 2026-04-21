@@ -63,6 +63,10 @@ async def startup():
             await conn.execute(text("ALTER TABLE users ADD COLUMN description VARCHAR DEFAULT ''"))
         except Exception:
             pass
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN energy INTEGER DEFAULT 100"))
+        except Exception:
+            print("[DB] Migration: colonne 'energy' déjà existante.")
     print("[DB] Tables SQLite créées ou vérifiées et colonnes migrées.")
     
     # Démarrage de la tâche de fond pour le respawn
